@@ -1,6 +1,9 @@
 // Example usage of Zodirectus library
+// 
+// To use this example, install Zodirectus from GitHub:
+// pnpm add https://github.com/InformationSystemsAgency/zodirectus.git
 
-import { Zodirectus } from './index';
+import { Zodirectus } from 'zodirectus';
 
 async function example() {
   // Initialize Zodirectus with your Directus configuration

@@ -27,16 +27,19 @@
     "cms",
     "headless"
   ],
-  "author": "Your Name <your.email@example.com>",
+  "author": "Artak Kolyan <a.kolyan@gratun.am>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/zodirectus.git"
+    "url": "https://github.com/InformationSystemsAgency/zodirectus.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/zodirectus/issues"
+    "url": "https://github.com/InformationSystemsAgency/zodirectus/issues"
   },
-  "homepage": "https://github.com/yourusername/zodirectus#readme",
+  "homepage": "https://github.com/InformationSystemsAgency/zodirectus#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "files": [
     "dist",
     "README.md",

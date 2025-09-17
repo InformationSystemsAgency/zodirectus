@@ -16,14 +16,27 @@ Generate Zod schemas and TypeScript types from Directus collections automaticall
 
 ## Installation
 
+### From GitHub
 ```bash
-pnpm add zodirectus
+# Install directly from GitHub
+pnpm add https://github.com/InformationSystemsAgency/zodirectus.git
+
+# Or install globally for CLI usage
+pnpm add -g https://github.com/InformationSystemsAgency/zodirectus.git
 ```
 
-Or install globally for CLI usage:
-
+### Alternative: Clone and build locally
 ```bash
-pnpm add -g zodirectus
+# Clone the repository
+git clone https://github.com/InformationSystemsAgency/zodirectus.git
+cd zodirectus
+
+# Install dependencies and build
+pnpm install
+pnpm run build
+
+# Use the CLI locally
+node dist/cli.js --help
 ```
 
 ## Quick Start
@@ -241,6 +254,8 @@ app.post('/api/users', async (req, res) => {
 }
 ```
 
+**Note**: If you installed from GitHub, make sure the `zodirectus` command is available in your PATH, or use the full path to the installed binary.
+
 ## Development
 
 ### Prerequisites
@@ -252,7 +267,7 @@ app.post('/api/users', async (req, res) => {
 ### Setup
 
 ```bash
-git clone https://github.com/yourusername/zodirectus.git
+git clone https://github.com/InformationSystemsAgency/zodirectus.git
 cd zodirectus
 pnpm install
 pnpm run build
@@ -278,9 +293,21 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
-- 📖 [Documentation](https://github.com/yourusername/zodirectus#readme)
-- 🐛 [Issue Tracker](https://github.com/yourusername/zodirectus/issues)
-- 💬 [Discussions](https://github.com/yourusername/zodirectus/discussions)
+- 📖 [Documentation](https://github.com/InformationSystemsAgency/zodirectus#readme)
+- 🐛 [Issue Tracker](https://github.com/InformationSystemsAgency/zodirectus/issues)
+- 💬 [Discussions](https://github.com/InformationSystemsAgency/zodirectus/discussions)
+
+## Installation from GitHub
+
+Since this package is currently hosted only on GitHub, you can install it using:
+
+```bash
+# Install as a dependency
+pnpm add https://github.com/InformationSystemsAgency/zodirectus.git
+
+# Install globally for CLI usage
+pnpm add -g https://github.com/InformationSystemsAgency/zodirectus.git
+```
 
 ## Changelog
 

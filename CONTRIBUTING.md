@@ -15,7 +15,7 @@ Thank you for your interest in contributing to Zodirectus! This document provide
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/yourusername/zodirectus.git
+   git clone https://github.com/InformationSystemsAgency/zodirectus.git
    cd zodirectus
    ```
 3. Install dependencies:
@@ -122,6 +122,22 @@ For feature requests, please include:
 ## License
 
 By contributing to Zodirectus, you agree that your contributions will be licensed under the MIT License.
+
+## Installation for Contributors
+
+Since this package is currently hosted only on GitHub, contributors can install it using:
+
+```bash
+# Clone the repository
+git clone https://github.com/InformationSystemsAgency/zodirectus.git
+cd zodirectus
+
+# Install dependencies
+pnpm install
+
+# Build the project
+pnpm run build
+```
 
 ## Questions?
 
