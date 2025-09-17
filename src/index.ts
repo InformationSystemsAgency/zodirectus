@@ -179,7 +179,7 @@ export class Zodirectus {
         const relatedFileName = this.toKebabCase(originalCollectionName);
         const schemaName = `Drx${singularName}Schema`;
         const typeName = `Drs${singularName}`;
-        fileContent += `import { ${schemaName}, ${typeName} } from './${relatedFileName}';\n`;
+        fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
       }
       
       if (fileContent.includes('import')) {
