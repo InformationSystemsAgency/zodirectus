@@ -17,16 +17,38 @@ export class ZodGenerator {
    */
   generateSchema(collection: DirectusCollectionWithFields): string {
     const collectionName = this.toPascalCase(collection.collection);
-    const schemaName = `${collectionName}Schema`;
+    const schemaName = `Drx${collectionName}Schema`;
     
     const fields = collection.fields
-      .filter(field => !field.meta?.hidden)
+      .filter(field => !field.meta?.hidden && !this.isDividerField(field))
       .map(field => this.generateFieldSchema(field))
       .join(',\n    ');
 
     return `export const ${schemaName} = z.object({
     ${fields}
 });`;
+  }
+
+  /**
+   * Check if a field is a divider field that should be excluded
+   */
+  private isDividerField(field: DirectusField): boolean {
+    // Check if field name starts with 'divider-'
+    if (field.field.startsWith('divider-')) {
+      return true;
+    }
+    
+    // Check if field interface is 'divider'
+    if (field.meta?.interface === 'divider') {
+      return true;
+    }
+    
+    // Check if field type is 'divider'
+    if (field.type === 'divider') {
+      return true;
+    }
+    
+    return false;
   }
 
   /**
@@ -86,6 +108,7 @@ export class ZodGenerator {
       case 'char':
       case 'text':
       case 'longtext':
+      case 'character varying':
         return 'z.string()';
       
       case 'integer':
@@ -144,14 +167,7 @@ export class ZodGenerator {
       .map(schema => schema.schema)
       .join('\n\n');
 
-    const exports = '\n\n' + schemas
-      .map(schema => {
-        const collectionName = this.toPascalCase(schema.collectionName);
-        return `export const ${collectionName}Schema = ${collectionName}Schema;`;
-      })
-      .join('\n');
-
-    return imports + schemaDefinitions + exports;
+    return imports + schemaDefinitions;
   }
 
   /**

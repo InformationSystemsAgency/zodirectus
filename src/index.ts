@@ -55,27 +55,31 @@ export class Zodirectus {
 
       // Generate schemas and types for each collection
       for (const collection of filteredCollections) {
-        const collectionWithFields = await this.client.getCollectionWithFields(collection.collection);
-        
-        if (this.config.generateSchemas) {
-          const schema = this.zodGenerator.generateSchema(collectionWithFields);
-          results.push({
-            collectionName: collection.collection,
-            schema,
-          });
-        }
-
-        if (this.config.generateTypes) {
-          const type = this.typeGenerator.generateType(collectionWithFields);
-          const existingResult = results.find(r => r.collectionName === collection.collection);
-          if (existingResult) {
-            existingResult.type = type;
-          } else {
+        try {
+          const collectionWithFields = await this.client.getCollectionWithFields(collection.collection);
+          
+          if (this.config.generateSchemas) {
+            const schema = this.zodGenerator.generateSchema(collectionWithFields);
             results.push({
               collectionName: collection.collection,
-              type,
+              schema,
             });
           }
+
+          if (this.config.generateTypes) {
+            const type = this.typeGenerator.generateType(collectionWithFields);
+            const existingResult = results.find(r => r.collectionName === collection.collection);
+            if (existingResult) {
+              existingResult.type = type;
+            } else {
+              results.push({
+                collectionName: collection.collection,
+                type,
+              });
+            }
+          }
+        } catch (error) {
+          console.log(`Collection '${collection.collection}' skipped due to access error:`, error instanceof Error ? error.message : 'Unknown error');
         }
       }
 

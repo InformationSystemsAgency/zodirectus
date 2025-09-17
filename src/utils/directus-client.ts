@@ -75,6 +75,7 @@ export class DirectusClient {
       const fieldsResponse: AxiosResponse<{ data: any[] }> = await this.axiosInstance.get(`/fields/${collectionName}`);
       const fields = fieldsResponse.data.data;
 
+
       return {
         ...collection,
         fields,

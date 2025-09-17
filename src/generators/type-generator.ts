@@ -15,16 +15,38 @@ export class TypeGenerator {
    */
   generateType(collection: DirectusCollectionWithFields): string {
     const collectionName = this.toPascalCase(collection.collection);
-    const typeName = `${collectionName}Type`;
+    const typeName = `Drs${collectionName}`;
     
     const fields = collection.fields
-      .filter(field => !field.meta?.hidden)
+      .filter(field => !field.meta?.hidden && !this.isDividerField(field))
       .map(field => this.generateFieldType(field))
       .join(';\n  ');
 
     return `export interface ${typeName} {
   ${fields};
 }`;
+  }
+
+  /**
+   * Check if a field is a divider field that should be excluded
+   */
+  private isDividerField(field: DirectusField): boolean {
+    // Check if field name starts with 'divider-'
+    if (field.field.startsWith('divider-')) {
+      return true;
+    }
+    
+    // Check if field interface is 'divider'
+    if (field.meta?.interface === 'divider') {
+      return true;
+    }
+    
+    // Check if field type is 'divider'
+    if (field.type === 'divider') {
+      return true;
+    }
+    
+    return false;
   }
 
   /**
@@ -36,12 +58,14 @@ export class TypeGenerator {
     const isRequired = field.meta?.required ?? false;
     // const isNullable = field.schema?.is_nullable ?? true; // Currently not used
 
-    let type = `${fieldName}: ${tsType}`;
-
+    let type = fieldName;
+    
     // Handle optional fields
     if (!isRequired) {
       type += '?';
     }
+    
+    type += `: ${tsType}`;
 
     return type;
   }
@@ -79,6 +103,7 @@ export class TypeGenerator {
       case 'char':
       case 'text':
       case 'longtext':
+      case 'character varying':
         return 'string';
       
       case 'integer':
