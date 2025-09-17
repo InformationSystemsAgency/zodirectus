@@ -17,7 +17,8 @@ export class ZodGenerator {
    */
   generateSchema(collection: DirectusCollectionWithFields): string {
     const collectionName = this.toPascalCase(collection.collection);
-    const schemaName = `Drx${collectionName}Schema`;
+    const singularName = this.toSingular(collectionName);
+    const schemaName = `Drx${singularName}Schema`;
     
     const fields = collection.fields
       .filter(field => !field.meta?.hidden && !this.isDividerField(field))
@@ -127,7 +128,7 @@ export class ZodGenerator {
     if (this.isRelationField(field)) {
       const relatedCollection = this.getRelatedCollectionName(field);
       if (relatedCollection) {
-        const relatedSchemaName = `Drx${this.toPascalCase(relatedCollection)}Schema`;
+        const relatedSchemaName = `Drx${this.toSingular(this.toPascalCase(relatedCollection))}Schema`;
         
         // M2O relations are single objects
         if (special.includes('m2o')) {
@@ -272,6 +273,41 @@ export class ZodGenerator {
       .split(/[-_\s]+/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
+  }
+
+  /**
+   * Convert plural word to singular
+   */
+  private toSingular(word: string): string {
+    // Common plural to singular conversions
+    const pluralToSingular: Record<string, string> = {
+      'Applications': 'Application',
+      'Banks': 'Bank',
+      'Clerks': 'Clerk',
+      'Languages': 'Language',
+      'Globals': 'Global',
+      'AuditAccountabilityLogs': 'AuditAccountabilityLog',
+      'AuditActivityLogs': 'AuditActivityLog',
+      'AuditSessions': 'AuditSession',
+      'GlobalsTranslations': 'GlobalsTranslation'
+    };
+
+    if (pluralToSingular[word]) {
+      return pluralToSingular[word];
+    }
+
+    // Generic rules for common plural patterns
+    if (word.endsWith('ies')) {
+      return word.slice(0, -3) + 'y';
+    }
+    if (word.endsWith('ses') || word.endsWith('shes') || word.endsWith('ches') || word.endsWith('xes') || word.endsWith('zes')) {
+      return word.slice(0, -2);
+    }
+    if (word.endsWith('s') && word.length > 1) {
+      return word.slice(0, -1);
+    }
+
+    return word;
   }
 
   /**
