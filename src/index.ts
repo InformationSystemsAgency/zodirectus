@@ -129,23 +129,43 @@ export class Zodirectus {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // Group results by type
-    const schemas = results.filter(r => r.schema);
-    const types = results.filter(r => r.type);
-
-    // Write schema file
-    if (schemas.length > 0 && this.config.generateSchemas) {
-      const schemaContent = this.zodGenerator.generateSchemaFile(schemas);
-      const schemaPath = path.join(outputDir, this.config.schemaFileName!);
-      fs.writeFileSync(schemaPath, schemaContent);
+    // Write individual files for each collection
+    for (const result of results) {
+      const collectionName = this.toKebabCase(result.collectionName);
+      const filePath = path.join(outputDir, `${collectionName}.ts`);
+      
+      let fileContent = '';
+      
+      // Add imports
+      if (result.schema && result.type) {
+        fileContent += `import { z } from 'zod';\n\n`;
+      } else if (result.schema) {
+        fileContent += `import { z } from 'zod';\n\n`;
+      }
+      
+      // Add schema
+      if (result.schema) {
+        fileContent += result.schema + '\n\n';
+      }
+      
+      // Add type
+      if (result.type) {
+        fileContent += result.type + '\n';
+      }
+      
+      // Write the file
+      fs.writeFileSync(filePath, fileContent);
     }
+  }
 
-    // Write types file
-    if (types.length > 0 && this.config.generateTypes) {
-      const typeContent = this.typeGenerator.generateTypeFile(types);
-      const typePath = path.join(outputDir, this.config.typesFileName!);
-      fs.writeFileSync(typePath, typeContent);
-    }
+  /**
+   * Convert string to kebab-case for file names
+   */
+  private toKebabCase(str: string): string {
+    return str
+      .replace(/([a-z])([A-Z])/g, '$1-$2')
+      .replace(/[\s_]+/g, '-')
+      .toLowerCase();
   }
 
   /**

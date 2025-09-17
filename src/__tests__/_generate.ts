@@ -6,6 +6,7 @@ async function generate() {
     directusUrl: 'http://localhost:8055',
     token: 'OM81Do6DiEU5KCd12QnKpeb9AkSmWrVD',
     // collections: ['applications'], // Only generate for applications collection
+    outputDir: './generated',
   });
 
   console.log('Generating schemas and types...');
