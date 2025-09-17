@@ -136,11 +136,52 @@ export class Zodirectus {
       
       let fileContent = '';
       
+      // Collect all related collections that need to be imported
+      const relatedCollections = new Set<string>();
+      
+      if (result.schema) {
+        // Extract schema references from the generated schema
+        const schemaMatches = result.schema.match(/Drx[A-Z][a-zA-Z]*Schema/g);
+        if (schemaMatches) {
+          schemaMatches.forEach(match => {
+            const relatedCollectionName = match.replace('Drx', '').replace('Schema', '');
+            // Don't import from self
+            if (relatedCollectionName !== this.toPascalCase(result.collectionName)) {
+              relatedCollections.add(relatedCollectionName);
+            }
+          });
+        }
+      }
+      
+      if (result.type) {
+        // Extract type references from the generated type
+        const typeMatches = result.type.match(/Drs[A-Z][a-zA-Z]*/g);
+        if (typeMatches) {
+          typeMatches.forEach(match => {
+            const relatedCollectionName = match.replace('Drs', '');
+            // Don't import from self
+            if (relatedCollectionName !== this.toPascalCase(result.collectionName)) {
+              relatedCollections.add(relatedCollectionName);
+            }
+          });
+        }
+      }
+      
       // Add imports
-      if (result.schema && result.type) {
-        fileContent += `import { z } from 'zod';\n\n`;
-      } else if (result.schema) {
-        fileContent += `import { z } from 'zod';\n\n`;
+      if (result.schema) {
+        fileContent += `import { z } from 'zod';\n`;
+      }
+      
+      // Add imports for related collections
+      for (const relatedCollectionName of relatedCollections) {
+        const relatedFileName = this.toKebabCase(relatedCollectionName);
+        const schemaName = `Drx${relatedCollectionName}Schema`;
+        const typeName = `Drs${relatedCollectionName}`;
+        fileContent += `import { ${schemaName}, ${typeName} } from './${relatedFileName}';\n`;
+      }
+      
+      if (fileContent.includes('import')) {
+        fileContent += '\n';
       }
       
       // Add schema
@@ -166,6 +207,16 @@ export class Zodirectus {
       .replace(/([a-z])([A-Z])/g, '$1-$2')
       .replace(/[\s_]+/g, '-')
       .toLowerCase();
+  }
+
+  /**
+   * Convert string to PascalCase
+   */
+  private toPascalCase(str: string): string {
+    return str
+      .split(/[-_\s]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
   }
 
   /**

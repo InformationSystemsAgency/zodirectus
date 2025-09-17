@@ -16,6 +16,9 @@ export interface DirectusField {
     max_length?: number;
     numeric_precision?: number;
     numeric_scale?: number;
+    foreign_key_schema?: string;
+    foreign_key_table?: string;
+    foreign_key_column?: string;
   };
   meta?: {
     id: number;

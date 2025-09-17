@@ -52,6 +52,46 @@ export class ZodGenerator {
   }
 
   /**
+   * Check if a field is a relation field
+   */
+  private isRelationField(field: DirectusField): boolean {
+    const special = field.meta?.special || [];
+    const interface_ = field.meta?.interface || '';
+    
+    return special.includes('m2o') || 
+           special.includes('o2m') || 
+           special.includes('m2a') ||
+           interface_.includes('m2o') ||
+           interface_.includes('o2m') ||
+           interface_.includes('m2a');
+  }
+
+  /**
+   * Get the related collection name for a relation field
+   */
+  private getRelatedCollectionName(field: DirectusField): string | null {
+    const special = field.meta?.special || [];
+    
+    // For M2O relations, get the foreign key table
+    if (special.includes('m2o') && field.schema?.foreign_key_table) {
+      return field.schema.foreign_key_table;
+    }
+    
+    // For O2M relations, we need to infer from the field name or options
+    if (special.includes('o2m')) {
+      // For O2M, the field name usually indicates the related collection
+      // e.g., 'activity_logs' field in 'audit_sessions' relates to 'audit_activity_logs'
+      const fieldName = field.field;
+      if (fieldName === 'activity_logs') {
+        return 'audit_activity_logs';
+      }
+      // Add more patterns as needed
+    }
+    
+    return null;
+  }
+
+  /**
    * Generate Zod schema for a field
    */
   private generateFieldSchema(field: DirectusField): string {
@@ -81,6 +121,60 @@ export class ZodGenerator {
   private getZodType(field: DirectusField): string {
     const directusType = field.schema?.data_type || field.type;
     const special = field.meta?.special || [];
+    const options = field.meta?.options || {};
+
+    // Handle relation fields
+    if (this.isRelationField(field)) {
+      const relatedCollection = this.getRelatedCollectionName(field);
+      if (relatedCollection) {
+        const relatedSchemaName = `Drx${this.toPascalCase(relatedCollection)}Schema`;
+        
+        // M2O relations are single objects
+        if (special.includes('m2o')) {
+          return relatedSchemaName;
+        }
+        
+        // O2M relations are arrays
+        if (special.includes('o2m')) {
+          return `z.array(${relatedSchemaName})`;
+        }
+        
+        // M2A relations are arrays
+        if (special.includes('m2a')) {
+          return `z.array(${relatedSchemaName})`;
+        }
+      }
+    }
+
+    // Handle enum/choice fields with predefined values
+    if (options.choices && Array.isArray(options.choices) && options.choices.length > 0) {
+      const choices = options.choices.map((choice: any) => {
+        if (typeof choice === 'string') {
+          return `"${choice}"`;
+        } else if (choice && typeof choice === 'object' && choice.value) {
+          return `"${choice.value}"`;
+        }
+        return `"${choice}"`;
+      }).join(', ');
+      
+      return `z.enum([${choices}])`;
+    }
+
+    // Handle dropdown/select fields with options
+    if (options.options && Array.isArray(options.options) && options.options.length > 0) {
+      const choices = options.options.map((option: any) => {
+        if (typeof option === 'string') {
+          return `"${option}"`;
+        } else if (option && typeof option === 'object' && option.value) {
+          return `"${option.value}"`;
+        } else if (option && typeof option === 'object' && option.text) {
+          return `"${option.text}"`;
+        }
+        return `"${option}"`;
+      }).join(', ');
+      
+      return `z.enum([${choices}])`;
+    }
 
     // Handle special field types first
     if (special.includes('uuid')) {
