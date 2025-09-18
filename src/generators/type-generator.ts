@@ -74,6 +74,96 @@ export class TypeGenerator {
   }
 
   /**
+   * Check if a field is a repeater field
+   */
+  private isRepeaterField(field: DirectusField): boolean {
+    const special = field.meta?.special || [];
+    const interface_ = field.meta?.interface || '';
+    const options = field.meta?.options || {};
+    
+    return special.includes('cast-json') && 
+           interface_ === 'list' && 
+           options.fields && 
+           Array.isArray(options.fields) && 
+           options.fields.length > 0;
+  }
+
+  /**
+   * Generate TypeScript type for a repeater field
+   */
+  private generateRepeaterType(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const repeaterFields = options.fields || [];
+    
+    if (repeaterFields.length === 0) {
+      return 'any[]';
+    }
+    
+    // Generate type for each sub-field
+    const subFieldTypes = repeaterFields.map((subField: any) => {
+      const subFieldName = subField.field;
+      const subFieldType = subField.type;
+      const subFieldMeta = subField.meta || {};
+      
+      // Generate TypeScript type for the sub-field
+      const tsType = this.getTypeScriptTypeForSubField(subFieldType, subFieldMeta);
+      
+      return `${subFieldName}: ${tsType}`;
+    });
+    
+    const subFieldsString = subFieldTypes.join('; ');
+    
+    return `{\n    ${subFieldsString};\n}[]`;
+  }
+
+  /**
+   * Get TypeScript type for a sub-field in a repeater
+   */
+  private getTypeScriptTypeForSubField(fieldType: string, meta: any): string {
+    switch (fieldType) {
+      case 'integer':
+      case 'bigint':
+      case 'smallint':
+      case 'tinyint':
+        return 'number';
+      
+      case 'decimal':
+      case 'float':
+      case 'double':
+        return 'number';
+      
+      case 'boolean':
+        return 'boolean';
+      
+      case 'varchar':
+      case 'char':
+      case 'text':
+      case 'longtext':
+      case 'character varying':
+        return 'string';
+      
+      case 'date':
+        return 'string';
+      
+      case 'datetime':
+      case 'timestamp':
+        return 'string';
+      
+      case 'time':
+        return 'string';
+      
+      case 'uuid':
+        return 'string';
+      
+      case 'json':
+        return 'any';
+      
+      default:
+        return 'string';
+    }
+  }
+
+  /**
    * Check if a field is a divider field that should be excluded
    */
   private isDividerField(field: DirectusField): boolean {
@@ -163,6 +253,11 @@ export class TypeGenerator {
     const directusType = field.schema?.data_type || field.type;
     const special = field.meta?.special || [];
     const options = field.meta?.options || {};
+
+    // Handle repeater fields
+    if (this.isRepeaterField(field)) {
+      return this.generateRepeaterType(field);
+    }
 
     // Handle relation fields
     if (this.isRelationField(field)) {

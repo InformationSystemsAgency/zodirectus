@@ -23,7 +23,6 @@ export class ZodGenerator {
     const filteredFields = collection.fields
       .filter(field => !this.isDividerField(field)); // Include all fields except dividers
     
-    
     // Check if ID field exists, if not add it
     const hasIdField = filteredFields.some(field => field.field === 'id');
     const fields = filteredFields.map(field => this.generateFieldSchema(field));
@@ -105,6 +104,101 @@ ${omitFieldsString}
     }
     
     return fieldsToOmit;
+  }
+
+  /**
+   * Check if a field is a repeater field
+   */
+  private isRepeaterField(field: DirectusField): boolean {
+    const special = field.meta?.special || [];
+    const interface_ = field.meta?.interface || '';
+    const options = field.meta?.options || {};
+    
+    return special.includes('cast-json') && 
+           interface_ === 'list' && 
+           options.fields && 
+           Array.isArray(options.fields) && 
+           options.fields.length > 0;
+  }
+
+  /**
+   * Generate Zod schema for a repeater field
+   */
+  private generateRepeaterSchema(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const repeaterFields = options.fields || [];
+    
+    if (repeaterFields.length === 0) {
+      return 'z.array(z.any())';
+    }
+    
+    // Generate schema for each sub-field
+    const subFieldSchemas = repeaterFields.map((subField: any) => {
+      const subFieldName = subField.field;
+      const subFieldType = subField.type;
+      const subFieldMeta = subField.meta || {};
+      
+      // Generate Zod type for the sub-field
+      let zodType = this.getZodTypeForSubField(subFieldType, subFieldMeta);
+      
+      // Handle nullable and optional
+      if (subFieldMeta.interface === null || subFieldMeta.interface === undefined) {
+        // Default behavior for sub-fields
+      }
+      
+      return `${subFieldName}: ${zodType}`;
+    });
+    
+    const subFieldsString = subFieldSchemas.join(',\n    ');
+    
+    return `z.array(z.object({\n    ${subFieldsString}\n}))`;
+  }
+
+  /**
+   * Get Zod type for a sub-field in a repeater
+   */
+  private getZodTypeForSubField(fieldType: string, meta: any): string {
+    switch (fieldType) {
+      case 'integer':
+      case 'bigint':
+      case 'smallint':
+      case 'tinyint':
+        return 'z.number().int()';
+      
+      case 'decimal':
+      case 'float':
+      case 'double':
+        return 'z.number()';
+      
+      case 'boolean':
+        return 'z.boolean()';
+      
+      case 'varchar':
+      case 'char':
+      case 'text':
+      case 'longtext':
+      case 'character varying':
+        return 'z.string()';
+      
+      case 'date':
+        return 'z.string().date()';
+      
+      case 'datetime':
+      case 'timestamp':
+        return 'z.string().datetime()';
+      
+      case 'time':
+        return 'z.string().time()';
+      
+      case 'uuid':
+        return 'z.string().uuid()';
+      
+      case 'json':
+        return 'z.any()';
+      
+      default:
+        return 'z.string()';
+    }
   }
 
   /**
@@ -200,6 +294,11 @@ ${omitFieldsString}
     const directusType = field.schema?.data_type || field.type;
     const special = field.meta?.special || [];
     const options = field.meta?.options || {};
+
+    // Handle repeater fields
+    if (this.isRepeaterField(field)) {
+      return this.generateRepeaterSchema(field);
+    }
 
     // Handle relation fields
     if (this.isRelationField(field)) {
