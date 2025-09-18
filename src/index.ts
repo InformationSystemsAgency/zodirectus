@@ -203,23 +203,24 @@ export class Zodirectus {
       
       // Add schema
       if (result.schema) {
-        // Handle circular dependencies by wrapping schema references in z.lazy()
-        let schemaContent = result.schema;
         const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
         
-        for (const singularName of relatedCollections) {
-          const isCircular = this.isCircularDependency(currentCollectionName, singularName, circularDeps);
-          if (isCircular) {
-            const schemaName = `Drx${singularName}Schema`;
-            // Replace direct schema references with lazy references for circular dependencies
-            schemaContent = schemaContent.replace(
-              new RegExp(`\\b${schemaName}\\b`, 'g'),
-              `z.lazy(() => ${schemaName})`
-            );
-          }
-        }
+        // Check if this schema is part of any circular dependency
+        const isPartOfCircularDependency = circularDeps.some(cycle => 
+          cycle.includes(currentCollectionName)
+        );
         
-        fileContent += schemaContent + '\n\n';
+        if (isPartOfCircularDependency) {
+          // Wrap the entire schema definition in z.lazy() for circular dependencies
+          const schemaName = `Drx${currentCollectionName}Schema`;
+          const schemaBody = result.schema.replace(`export const ${schemaName} =`, '').trim();
+          // Remove the trailing semicolon from the original schema body
+          const cleanSchemaBody = schemaBody.replace(/;$/, '');
+          fileContent += `export const ${schemaName}: z.ZodType<any> = z.lazy(() => ${cleanSchemaBody});\n\n`;
+        } else {
+          // Normal schema definition for non-circular dependencies
+          fileContent += result.schema + '\n\n';
+        }
       }
       
       // Add type
