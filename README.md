@@ -7,7 +7,7 @@ Generate Zod schemas and TypeScript types from Directus collections automaticall
 
 ## Installation
 
-📖 **For detailed and simple installation instructions, see [INSTALLATION.md](./INSTALLATION.md)**
+📖 **For detailed installation tutorial, see [INSTALLATION.md](./INSTALLATION.md)**
 
 ### From GitHub
 ```bash
@@ -289,68 +289,6 @@ const zodirectus = new Zodirectus({
   },
 });
 ```
-
-## Integration Examples
-
-### With Next.js
-
-```typescript
-// lib/directus.ts
-import { Zodirectus } from 'zodirectus';
-
-export async function generateDgitirectusTypes() {
-  const zodirectus = new Zodirectus({
-    directusUrl: process.env.DIRECTUS_URL!,
-    token: process.env.DIRECTUS_TOKEN!,
-    outputDir: './types',
-  });
-
-  await zodirectus.generate();
-}
-```
-
-### With Express.js
-
-```typescript
-// routes/api.ts
-import { DrxUserCreateSchema, type DrsUserCreate } from '../generated/user';
-
-app.post('/api/users', async (req, res) => {
-  try {
-    const userData = DrxUserCreateSchema.parse(req.body);
-    // userData is now fully typed and validated as DrsUserCreate
-    const user = await createUser(userData);
-    res.json(user);
-  } catch (error) {
-    res.status(400).json({ error: 'Invalid user data' });
-  }
-});
-
-app.put('/api/users/:id', async (req, res) => {
-  try {
-    const { DrxUserUpdateSchema, type DrsUserUpdate } = await import('../generated/user');
-    const userData = DrxUserUpdateSchema.parse({ id: req.params.id, ...req.body });
-    // userData is now fully typed and validated as DrsUserUpdate
-    const user = await updateUser(userData);
-    res.json(user);
-  } catch (error) {
-    res.status(400).json({ error: 'Invalid user data' });
-  }
-});
-```
-
-### Build Script Integration
-
-```json
-{
-  "scripts": {
-    "generate:types": "zodirectus --url $DIRECTUS_URL --token $DIRECTUS_TOKEN",
-    "build": "pnpm run generate:types && pnpm run build:app"
-  }
-}
-```
-
-**Note**: If you installed from GitHub, make sure the `zodirectus` command is available in your PATH, or use the full path to the installed binary.
 
 ## Development
 

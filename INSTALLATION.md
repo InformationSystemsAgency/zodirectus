@@ -8,6 +8,8 @@ This project integrates [zodirectus](https://github.com/InformationSystemsAgency
    ```bash
    pnpm add zodirectus@github:InformationSystemsAgency/zodirectus dotenv
    ```
+   
+   > **Note:** If you installed from GitHub, make sure the `zodirectus` command is available in your PATH, or use the full path to the installed binary.
 
 2. **Configure environment variables:**
    Edit `.env` with your Directus credentials:
