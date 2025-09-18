@@ -129,6 +129,10 @@ export class Zodirectus {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
+    // Build dependency graph and detect circular dependencies
+    const dependencyGraph = this.buildDependencyGraph(results);
+    const circularDeps = this.detectCircularDependencies(dependencyGraph);
+
     // Write individual files for each collection
     for (const result of results) {
       const collectionName = this.toKebabCase(result.collectionName);
@@ -172,14 +176,25 @@ export class Zodirectus {
         fileContent += `import { z } from 'zod';\n`;
       }
       
-      // Add imports for related collections
+      // Add imports for related collections, handling circular dependencies
       for (const singularName of relatedCollections) {
         // Map singular name back to original collection name for file path
         const originalCollectionName = this.singularToPlural(singularName);
         const relatedFileName = this.toKebabCase(originalCollectionName);
         const schemaName = `Drx${singularName}Schema`;
         const typeName = `Drs${singularName}`;
-        fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
+        
+        // Check if this import would create a circular dependency
+        const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
+        const isCircular = this.isCircularDependency(currentCollectionName, singularName, circularDeps);
+        
+        if (isCircular) {
+          // Use type-only import for circular dependencies to avoid runtime circular imports
+          fileContent += `import type { ${schemaName}, ${typeName} } from './${relatedFileName}';\n`;
+        } else {
+          // Normal import for non-circular dependencies
+          fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
+        }
       }
       
       if (fileContent.includes('import')) {
@@ -199,6 +214,98 @@ export class Zodirectus {
       // Write the file
       fs.writeFileSync(filePath, fileContent);
     }
+  }
+
+  /**
+   * Build dependency graph from generated results
+   */
+  private buildDependencyGraph(results: GeneratedSchema[]): Map<string, Set<string>> {
+    const graph = new Map<string, Set<string>>();
+    
+    for (const result of results) {
+      const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
+      const dependencies = new Set<string>();
+      
+      // Extract dependencies from schema
+      if (result.schema) {
+        const schemaMatches = result.schema.match(/Drx[A-Z][a-zA-Z]*Schema/g);
+        if (schemaMatches) {
+          schemaMatches.forEach(match => {
+            const singularName = match.replace('Drx', '').replace('Schema', '');
+            if (singularName !== currentCollectionName) {
+              dependencies.add(singularName);
+            }
+          });
+        }
+      }
+      
+      // Extract dependencies from type
+      if (result.type) {
+        const typeMatches = result.type.match(/Drs[A-Z][a-zA-Z]*/g);
+        if (typeMatches) {
+          typeMatches.forEach(match => {
+            const singularName = match.replace('Drs', '');
+            if (singularName !== currentCollectionName) {
+              dependencies.add(singularName);
+            }
+          });
+        }
+      }
+      
+      graph.set(currentCollectionName, dependencies);
+    }
+    
+    return graph;
+  }
+
+  /**
+   * Detect circular dependencies using DFS
+   */
+  private detectCircularDependencies(graph: Map<string, Set<string>>): string[][] {
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+    const circularDeps = new Set<string[]>();
+    
+    const dfs = (node: string, path: string[]): void => {
+      visited.add(node);
+      recursionStack.add(node);
+      path.push(node);
+      
+      const neighbors = graph.get(node) || new Set();
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          dfs(neighbor, [...path]);
+        } else if (recursionStack.has(neighbor)) {
+          // Found a cycle
+          const cycleStart = path.indexOf(neighbor);
+          const cycle = path.slice(cycleStart);
+          cycle.push(neighbor); // Complete the cycle
+          circularDeps.add(cycle);
+        }
+      }
+      
+      recursionStack.delete(node);
+    };
+    
+    for (const node of graph.keys()) {
+      if (!visited.has(node)) {
+        dfs(node, []);
+      }
+    }
+    
+    return Array.from(circularDeps);
+  }
+
+  /**
+   * Check if two collections have a circular dependency
+   */
+  private isCircularDependency(collectionA: string, collectionB: string, circularDeps: string[][]): boolean {
+    for (const cycle of circularDeps) {
+      if (cycle.includes(collectionA) && cycle.includes(collectionB)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
