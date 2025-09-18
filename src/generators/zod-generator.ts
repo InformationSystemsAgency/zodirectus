@@ -15,19 +15,96 @@ export class ZodGenerator {
   /**
    * Generate Zod schema for a collection
    */
-  generateSchema(collection: DirectusCollectionWithFields): string {
+  generateSchema(collection: DirectusCollectionWithFields, isCircularDependency: boolean = false): string {
     const collectionName = this.toPascalCase(collection.collection);
     const singularName = this.toSingular(collectionName);
     const schemaName = `Drx${singularName}Schema`;
     
-    const fields = collection.fields
-      .filter(field => !field.meta?.hidden && !this.isDividerField(field))
-      .map(field => this.generateFieldSchema(field))
-      .join(',\n    ');
+    const filteredFields = collection.fields
+      .filter(field => !this.isDividerField(field)); // Include all fields except dividers
+    
+    
+    // Check if ID field exists, if not add it
+    const hasIdField = filteredFields.some(field => field.field === 'id');
+    const fields = filteredFields.map(field => this.generateFieldSchema(field));
+    
+    if (!hasIdField) {
+      fields.unshift('id: z.string().uuid().optional()');
+    }
+    
+    const fieldsString = fields.join(',\n    ');
 
-    return `export const ${schemaName} = z.object({
-    ${fields}
+    if (isCircularDependency) {
+      // For circular dependencies, generate lazy schemas
+      const baseSchema = `export const ${schemaName}: z.ZodType<any> = z.lazy(() => z.object({
+    ${fieldsString}
+}));`;
+
+      // Generate Create schema as a separate lazy schema
+      const createSchemaName = schemaName.replace('Schema', 'CreateSchema');
+      const fieldsToOmit = this.getFieldsToOmitForCreate(filteredFields, hasIdField);
+      const omitFieldsString = fieldsToOmit.map(field => `    ${field}: true`).join(',\n');
+      const createSchema = `export const ${createSchemaName}: z.ZodType<any> = z.lazy(() => (${schemaName} as z.ZodObject<any>).omit({
+${omitFieldsString}
+}));`;
+
+      // Generate Update schema as a separate lazy schema
+      const updateSchemaName = schemaName.replace('Schema', 'UpdateSchema');
+      const updateSchema = `export const ${updateSchemaName}: z.ZodType<any> = z.lazy(() => (${schemaName} as z.ZodObject<any>).partial().required({
+    id: true
+}));`;
+
+      // Generate Get schema as a separate lazy schema
+      const getSchemaName = schemaName.replace('Schema', 'GetSchema');
+      const getSchema = `export const ${getSchemaName}: z.ZodType<any> = z.lazy(() => ${schemaName});`;
+
+      return `${baseSchema}\n\n${createSchema}\n\n${updateSchema}\n\n${getSchema}`;
+    } else {
+      // For non-circular dependencies, generate normal schemas
+      const baseSchema = `export const ${schemaName} = z.object({
+    ${fieldsString}
 });`;
+
+      // Generate Create schema using .omit() - only omit fields that actually exist
+      const createSchemaName = schemaName.replace('Schema', 'CreateSchema');
+      const fieldsToOmit = this.getFieldsToOmitForCreate(filteredFields, hasIdField);
+      const omitFieldsString = fieldsToOmit.map(field => `    ${field}: true`).join(',\n');
+      const createSchema = `export const ${createSchemaName} = ${schemaName}.omit({
+${omitFieldsString}
+});`;
+
+      // Generate Update schema using .partial().required()
+      const updateSchemaName = schemaName.replace('Schema', 'UpdateSchema');
+      const updateSchema = `export const ${updateSchemaName} = ${schemaName}.partial().required({
+    id: true
+});`;
+
+      // Generate Get schema (same as base for now)
+      const getSchemaName = schemaName.replace('Schema', 'GetSchema');
+      const getSchema = `export const ${getSchemaName} = ${schemaName};`;
+
+      return `${baseSchema}\n\n${createSchema}\n\n${updateSchema}\n\n${getSchema}`;
+    }
+  }
+
+  /**
+   * Get fields that should be omitted in Create schema
+   */
+  private getFieldsToOmitForCreate(fields: DirectusField[], hasIdField: boolean): string[] {
+    const fieldsToOmit: string[] = [];
+    
+    // Always omit id field (either existing or artificially added)
+    fieldsToOmit.push('id');
+    
+    // Only omit system fields if they actually exist in the collection
+    const systemFields = ['user_created', 'date_created', 'user_updated', 'date_updated'];
+    for (const systemField of systemFields) {
+      if (fields.some(field => field.field === systemField)) {
+        fieldsToOmit.push(systemField);
+      }
+    }
+    
+    return fieldsToOmit;
   }
 
   /**
@@ -280,21 +357,21 @@ export class ZodGenerator {
    */
   private toSingular(word: string): string {
     // Common plural to singular conversions
-    const pluralToSingular: Record<string, string> = {
-      'Applications': 'Application',
-      'Banks': 'Bank',
-      'Clerks': 'Clerk',
-      'Languages': 'Language',
-      'Globals': 'Global',
-      'AuditAccountabilityLogs': 'AuditAccountabilityLog',
-      'AuditActivityLogs': 'AuditActivityLog',
-      'AuditSessions': 'AuditSession',
-      'GlobalsTranslations': 'GlobalsTranslation'
-    };
+    // const pluralToSingular: Record<string, string> = {
+    //   'Applications': 'Application',
+    //   'Banks': 'Bank',
+    //   'Clerks': 'Clerk',
+    //   'Languages': 'Language',
+    //   'Globals': 'Global',
+    //   'AuditAccountabilityLogs': 'AuditAccountabilityLog',
+    //   'AuditActivityLogs': 'AuditActivityLog',
+    //   'AuditSessions': 'AuditSession',
+    //   'GlobalsTranslations': 'GlobalsTranslation'
+    // };
 
-    if (pluralToSingular[word]) {
-      return pluralToSingular[word];
-    }
+    // if (pluralToSingular[word]) {
+    //   return pluralToSingular[word];
+    // }
 
     // Generic rules for common plural patterns
     if (word.endsWith('ies')) {

@@ -18,14 +18,59 @@ export class TypeGenerator {
     const singularName = this.toSingular(collectionName);
     const typeName = `Drs${singularName}`;
     
-    const fields = collection.fields
-      .filter(field => !field.meta?.hidden && !this.isDividerField(field))
-      .map(field => this.generateFieldType(field))
-      .join(';\n  ');
+    const filteredFields = collection.fields
+      .filter(field => !this.isDividerField(field)); // Include all fields except dividers
+    
+    // Check if ID field exists, if not add it
+    const hasIdField = filteredFields.some(field => field.field === 'id');
+    const fields = filteredFields.map(field => this.generateFieldType(field));
+    
+    if (!hasIdField) {
+      fields.unshift('id?: string');
+    }
+    
+    const fieldsString = fields.join(';\n  ');
 
-    return `export interface ${typeName} {
-  ${fields};
+    // Generate base interface
+    const baseInterface = `export interface ${typeName} {
+  ${fieldsString};
 }`;
+
+    // Generate Create interface using Omit utility type
+    const createTypeName = `${typeName}Create`;
+    const fieldsToOmit = this.getFieldsToOmitForCreate(filteredFields, hasIdField);
+    const omitFieldsString = fieldsToOmit.map(field => `"${field}"`).join(' | ');
+    const createInterface = `export type ${createTypeName} = Omit<${typeName}, ${omitFieldsString}>;`;
+
+    // Generate Update interface using Partial utility type
+    const updateTypeName = `${typeName}Update`;
+    const updateInterface = `export type ${updateTypeName} = Partial<${typeName}> & Required<Pick<${typeName}, "id">>;`;
+
+    // Generate Get interface (same as base for now)
+    const getTypeName = `${typeName}Get`;
+    const getInterface = `export type ${getTypeName} = ${typeName};`;
+
+    return `${baseInterface}\n\n${createInterface}\n\n${updateInterface}\n\n${getInterface}`;
+  }
+
+  /**
+   * Get fields that should be omitted in Create interface
+   */
+  private getFieldsToOmitForCreate(fields: DirectusField[], hasIdField: boolean): string[] {
+    const fieldsToOmit: string[] = [];
+    
+    // Always omit id field (either existing or artificially added)
+    fieldsToOmit.push('id');
+    
+    // Only omit system fields if they actually exist in the collection
+    const systemFields = ['user_created', 'date_created', 'user_updated', 'date_updated'];
+    for (const systemField of systemFields) {
+      if (fields.some(field => field.field === systemField)) {
+        fieldsToOmit.push(systemField);
+      }
+    }
+    
+    return fieldsToOmit;
   }
 
   /**
@@ -271,21 +316,21 @@ export class TypeGenerator {
    */
   private toSingular(word: string): string {
     // Common plural to singular conversions
-    const pluralToSingular: Record<string, string> = {
-      'Applications': 'Application',
-      'Banks': 'Bank',
-      'Clerks': 'Clerk',
-      'Languages': 'Language',
-      'Globals': 'Global',
-      'AuditAccountabilityLogs': 'AuditAccountabilityLog',
-      'AuditActivityLogs': 'AuditActivityLog',
-      'AuditSessions': 'AuditSession',
-      'GlobalsTranslations': 'GlobalsTranslation'
-    };
+    // const pluralToSingular: Record<string, string> = {
+    //   'Applications': 'Application',
+    //   'Banks': 'Bank',
+    //   'Clerks': 'Clerk',
+    //   'Languages': 'Language',
+    //   'Globals': 'Global',
+    //   'AuditAccountabilityLogs': 'AuditAccountabilityLog',
+    //   'AuditActivityLogs': 'AuditActivityLog',
+    //   'AuditSessions': 'AuditSession',
+    //   'GlobalsTranslations': 'GlobalsTranslation'
+    // };
 
-    if (pluralToSingular[word]) {
-      return pluralToSingular[word];
-    }
+    // if (pluralToSingular[word]) {
+    //   return pluralToSingular[word];
+    // }
 
     // Generic rules for common plural patterns
     if (word.endsWith('ies')) {

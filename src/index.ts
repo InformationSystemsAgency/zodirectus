@@ -83,6 +83,29 @@ export class Zodirectus {
         }
       }
 
+      // After all schemas are generated, detect circular dependencies and regenerate lazy schemas
+      const dependencyGraph = this.buildDependencyGraph(results);
+      const circularDeps = this.detectCircularDependencies(dependencyGraph);
+      
+      // Regenerate schemas for collections that are part of circular dependencies
+      for (const result of results) {
+        if (result.schema) {
+          const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
+          const isPartOfCircularDependency = circularDeps.some(cycle => 
+            cycle.includes(currentCollectionName)
+          );
+          
+          if (isPartOfCircularDependency) {
+            // Find the collection and regenerate with lazy schemas
+            const collection = filteredCollections.find(c => c.collection === result.collectionName);
+            if (collection) {
+              const collectionWithFields = await this.client.getCollectionWithFields(collection.collection);
+              result.schema = this.zodGenerator.generateSchema(collectionWithFields, true);
+            }
+          }
+        }
+      }
+
       // Write files to output directory
       await this.writeFiles(results);
 
@@ -145,27 +168,32 @@ export class Zodirectus {
       const relatedCollections = new Set<string>();
       
       if (result.schema) {
-        // Extract schema references from the generated schema
-        const schemaMatches = result.schema.match(/Drx[A-Z][a-zA-Z]*Schema/g);
-        if (schemaMatches) {
-          schemaMatches.forEach(match => {
-            const singularName = match.replace('Drx', '').replace('Schema', '');
-            // Don't import from self
-            if (singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
-              relatedCollections.add(singularName);
-            }
-          });
+        // Extract schema references from field definitions only (not from export statements)
+        // Look for Drx*Schema references in the z.object() part only
+        const objectMatch = result.schema.match(/z\.object\(\{[\s\S]*?\}\)/);
+        if (objectMatch) {
+          const fieldDefinitions = objectMatch[0];
+          const schemaMatches = fieldDefinitions.match(/Drx[A-Z][a-zA-Z]*Schema/g);
+          if (schemaMatches) {
+            schemaMatches.forEach(match => {
+              const singularName = match.replace('Drx', '').replace('Schema', '');
+              // Don't import from self
+              if (singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
+                relatedCollections.add(singularName);
+              }
+            });
+          }
         }
       }
       
       if (result.type) {
-        // Extract type references from the generated type
+        // Extract type references from the generated type (only base types, not Create/Update/Get)
         const typeMatches = result.type.match(/Drs[A-Z][a-zA-Z]*/g);
         if (typeMatches) {
           typeMatches.forEach(match => {
             const singularName = match.replace('Drs', '');
-            // Don't import from self
-            if (singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
+            // Skip Create, Update, Get types and don't import from self
+            if (!singularName.endsWith('Create') && !singularName.endsWith('Update') && !singularName.endsWith('Get') && singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
               relatedCollections.add(singularName);
             }
           });
@@ -203,24 +231,7 @@ export class Zodirectus {
       
       // Add schema
       if (result.schema) {
-        const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
-        
-        // Check if this schema is part of any circular dependency
-        const isPartOfCircularDependency = circularDeps.some(cycle => 
-          cycle.includes(currentCollectionName)
-        );
-        
-        if (isPartOfCircularDependency) {
-          // Wrap the entire schema definition in z.lazy() for circular dependencies
-          const schemaName = `Drx${currentCollectionName}Schema`;
-          const schemaBody = result.schema.replace(`export const ${schemaName} =`, '').trim();
-          // Remove the trailing semicolon from the original schema body
-          const cleanSchemaBody = schemaBody.replace(/;$/, '');
-          fileContent += `export const ${schemaName}: z.ZodType<any> = z.lazy(() => ${cleanSchemaBody});\n\n`;
-        } else {
-          // Normal schema definition for non-circular dependencies
-          fileContent += result.schema + '\n\n';
-        }
+        fileContent += result.schema + '\n\n';
       }
       
       // Add type
@@ -249,7 +260,8 @@ export class Zodirectus {
         if (schemaMatches) {
           schemaMatches.forEach(match => {
             const singularName = match.replace('Drx', '').replace('Schema', '');
-            if (singularName !== currentCollectionName) {
+            // Skip Create, Update, Get schemas
+            if (!singularName.endsWith('Create') && !singularName.endsWith('Update') && !singularName.endsWith('Get') && singularName !== currentCollectionName) {
               dependencies.add(singularName);
             }
           });
@@ -262,7 +274,8 @@ export class Zodirectus {
         if (typeMatches) {
           typeMatches.forEach(match => {
             const singularName = match.replace('Drs', '');
-            if (singularName !== currentCollectionName) {
+            // Skip Create, Update, Get types
+            if (!singularName.endsWith('Create') && !singularName.endsWith('Update') && !singularName.endsWith('Get') && singularName !== currentCollectionName) {
               dependencies.add(singularName);
             }
           });
