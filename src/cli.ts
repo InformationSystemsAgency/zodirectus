@@ -13,8 +13,6 @@ interface CLIOptions {
   output?: string;
   schemas?: boolean;
   types?: boolean;
-  schemaFile?: string;
-  typeFile?: string;
   system?: boolean;
   help?: boolean;
   version?: boolean;
@@ -29,8 +27,6 @@ function parseArgs(): CLIOptions {
     url: '',
     schemas: true,
     types: true,
-    schemaFile: 'schemas.ts',
-    typeFile: 'types.ts',
     system: false,
   };
 
@@ -73,12 +69,6 @@ function parseArgs(): CLIOptions {
         break;
       case '--no-types':
         options.types = false;
-        break;
-      case '--schema-file':
-        options.schemaFile = args[++i];
-        break;
-      case '--type-file':
-        options.typeFile = args[++i];
         break;
       case '--system':
         options.system = true;
@@ -123,8 +113,6 @@ Options:
   --no-schemas                 Skip Zod schema generation
   --types                      Generate TypeScript types (default: true)
   --no-types                   Skip TypeScript type generation
-  --schema-file <name>         Schema file name (default: schemas.ts)
-  --type-file <name>           Type file name (default: types.ts)
   --system                     Include system collections
   -h, --help                   Show this help message
   -v, --version                Show version information
@@ -182,8 +170,6 @@ async function main(): Promise<void> {
       outputDir: options.output,
       generateTypes: options.types,
       generateSchemas: options.schemas,
-      schemaFileName: options.schemaFile,
-      typesFileName: options.typeFile,
       includeSystemCollections: options.system,
     };
 
@@ -193,18 +179,14 @@ async function main(): Promise<void> {
     const zodirectus = new Zodirectus(config);
     const results = await zodirectus.generate();
 
-    console.log(`✅ Successfully generated schemas for ${results.length} collections:`);
+    console.log(`✅ Successfully generated schemas and types for ${results.length} collections:`);
     results.forEach(result => {
       console.log(`   - ${result.collectionName}`);
     });
 
     console.log(`📁 Files written to: ${config.outputDir}`);
-    if (config.generateSchemas) {
-      console.log(`   - ${config.schemaFileName}`);
-    }
-    if (config.generateTypes) {
-      console.log(`   - ${config.typesFileName}`);
-    }
+    console.log(`   - Individual .ts files for each collection`);
+    console.log(`   - Each file contains schemas and types`);
 
   } catch (error) {
     console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');

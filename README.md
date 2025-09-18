@@ -5,15 +5,6 @@ Generate Zod schemas and TypeScript types from Directus collections automaticall
 [![npm version](https://badge.fury.io/js/zodirectus.svg)](https://badge.fury.io/js/zodirectus)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
-
-- 🔄 **Automatic Generation**: Generate Zod schemas and TypeScript types from your Directus collections
-- 🎯 **Type Safety**: Full TypeScript support with proper type inference
-- 🚀 **CLI Tool**: Easy-to-use command-line interface
-- 📦 **Library**: Use as a library in your Node.js applications
-- 🔧 **Customizable**: Support for custom field mappings and configurations
-- 🏗️ **Build Ready**: Generated files are ready for production use
-
 ## Installation
 
 ### From GitHub
@@ -74,11 +65,18 @@ const zodirectus = new Zodirectus({
   generateSchemas: true,
 });
 
-// Generate all schemas
+// Generate all schemas and types
 const results = await zodirectus.generate();
 
-// Generate for specific collection
-const userSchema = await zodirectus.generateForCollection('users');
+// Generate for specific collections only
+const zodirectusSpecific = new Zodirectus({
+  directusUrl: 'https://your-directus-instance.com',
+  token: 'your-access-token',
+  collections: ['users', 'posts'], // Only generate for these collections
+  outputDir: './generated',
+});
+
+const specificResults = await zodirectusSpecific.generate();
 ```
 
 ## Configuration Options
@@ -93,8 +91,6 @@ const userSchema = await zodirectus.generateForCollection('users');
 | `outputDir` | string | `./generated` | Output directory for generated files |
 | `generateTypes` | boolean | `true` | Generate TypeScript types |
 | `generateSchemas` | boolean | `true` | Generate Zod schemas |
-| `schemaFileName` | string | `schemas.ts` | Name of the schema file |
-| `typesFileName` | string | `types.ts` | Name of the types file |
 | `includeSystemCollections` | boolean | `false` | Include Directus system collections |
 | `customFieldMappings` | object | `{}` | Custom field type mappings |
 
@@ -108,54 +104,78 @@ Options:
   -t, --token <token>          Authentication token
   -e, --email <email>          Email for authentication
   -p, --password <password>    Password for authentication
-  -c, --collections <list>     Comma-separated list of collections
+  -c, --collections <list>     Comma-separated list of collections to generate
   -o, --output <dir>           Output directory (default: ./generated)
   --schemas                    Generate Zod schemas (default: true)
   --no-schemas                 Skip Zod schema generation
   --types                      Generate TypeScript types (default: true)
   --no-types                   Skip TypeScript type generation
-  --schema-file <name>         Schema file name (default: schemas.ts)
-  --type-file <name>           Type file name (default: types.ts)
   --system                     Include system collections
-  -h, --help                   Show help message
+  -h, --help                   Show this help message
   -v, --version                Show version information
+
+Examples:
+  zodirectus --url https://api.example.com --token your-token
+  zodirectus --url https://api.example.com --email user@example.com --password pass123
+  zodirectus --url https://api.example.com --collections users,posts --output ./types
 ```
 
 ## Generated Output
 
+Zodirectus generates individual files for each collection in the output directory. Each file contains both Zod schemas and TypeScript types for that collection.
+
+### File Structure
+
+```
+generated/
+├── user.ts
+├── post.ts
+├── comment.ts
+└── ...
+```
+
 ### Zod Schemas
 
+Each collection file includes multiple Zod schemas:
+
 ```typescript
-// schemas.ts
+// user.ts
 import { z } from 'zod';
 
-export const UserSchema = z.object({
-  id: z.string().uuid(),
+export const DrxUserSchema = z.object({
+  id: z.string().uuid().optional(),
   email: z.string().email(),
-  first_name: z.string().optional(),
-  last_name: z.string().optional(),
-  role: z.string().optional(),
-  status: z.string().optional(),
-  date_created: z.string().datetime().optional(),
-  date_updated: z.string().datetime().optional(),
+  first_name: z.string().nullable().optional(),
+  last_name: z.string().nullable().optional(),
+  role: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  date_created: z.string().datetime().nullable().optional(),
+  date_updated: z.string().datetime().nullable().optional(),
 });
 
-export const PostSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string(),
-  content: z.string().optional(),
-  author: z.string().uuid(),
-  status: z.string().optional(),
-  date_created: z.string().datetime().optional(),
+export const DrxUserCreateSchema = DrxUserSchema.omit({
+  id: true,
+  user_created: true,
+  date_created: true,
+  user_updated: true,
+  date_updated: true
 });
+
+export const DrxUserUpdateSchema = DrxUserSchema.partial().required({
+  id: true
+});
+
+export const DrxUserGetSchema = DrxUserSchema;
 ```
 
 ### TypeScript Types
 
+Each collection file includes TypeScript interfaces using utility types:
+
 ```typescript
-// types.ts
-export interface UserType {
-  id: string;
+// user.ts
+export interface DrsUser {
+  id?: string;
   email: string;
   first_name?: string;
   last_name?: string;
@@ -165,15 +185,44 @@ export interface UserType {
   date_updated?: string;
 }
 
-export interface PostType {
-  id: string;
-  title: string;
-  content?: string;
-  author: string;
-  status?: string;
-  date_created?: string;
-}
+export type DrsUserCreate = Omit<DrsUser, "id" | "user_created" | "date_created" | "user_updated" | "date_updated">;
+
+export type DrsUserUpdate = Partial<DrsUser> & Required<Pick<DrsUser, "id">>;
+
+export type DrsUserGet = DrsUser;
 ```
+
+## Naming Conventions
+
+Zodirectus uses consistent naming conventions for generated schemas and types:
+
+### Schema Names
+- **Base Schema**: `Drx{CollectionName}Schema` (e.g., `DrxUserSchema`)
+- **Create Schema**: `Drx{CollectionName}CreateSchema` (e.g., `DrxUserCreateSchema`)
+- **Update Schema**: `Drx{CollectionName}UpdateSchema` (e.g., `DrxUserUpdateSchema`)
+- **Get Schema**: `Drx{CollectionName}GetSchema` (e.g., `DrxUserGetSchema`)
+
+### Type Names
+- **Base Type**: `Drs{CollectionName}` (e.g., `DrsUser`)
+- **Create Type**: `Drs{CollectionName}Create` (e.g., `DrsUserCreate`)
+- **Update Type**: `Drs{CollectionName}Update` (e.g., `DrsUserUpdate`)
+- **Get Type**: `Drs{CollectionName}Get` (e.g., `DrsUserGet`)
+
+### File Names
+- Collection names are converted to kebab-case (e.g., `user.ts`, `user-profile.ts`)
+
+## Features
+
+- 🔄 **Automatic Generation**: Generate Zod schemas and TypeScript types from your Directus collections
+- 🎯 **Type Safety**: Full TypeScript support with proper type inference
+- 🚀 **CLI Tool**: Easy-to-use command-line interface
+- 📦 **Library**: Use as a library in your Node.js applications
+- 🔧 **Customizable**: Support for custom field mappings and configurations
+- 🏗️ **Build Ready**: Generated files are ready for production use
+- 🔗 **Relations Support**: Automatic handling of Directus relations (M2O, O2M, M2A)
+- 🔄 **Circular Dependencies**: Smart handling of circular dependencies with lazy schemas
+- 📝 **CRUD Schemas**: Generate Create, Update, and Get schemas for each collection
+- 🎨 **Utility Types**: Use TypeScript utility types (Omit, Partial, Required) for type safety
 
 ## Field Type Mappings
 
@@ -213,7 +262,7 @@ const zodirectus = new Zodirectus({
 // lib/directus.ts
 import { Zodirectus } from 'zodirectus';
 
-export async function generateDirectusTypes() {
+export async function generateDgitirectusTypes() {
   const zodirectus = new Zodirectus({
     directusUrl: process.env.DIRECTUS_URL!,
     token: process.env.DIRECTUS_TOKEN!,
@@ -228,14 +277,25 @@ export async function generateDirectusTypes() {
 
 ```typescript
 // routes/api.ts
-import { UserSchema } from '../generated/schemas';
-import { UserType } from '../generated/types';
+import { DrxUserCreateSchema, type DrsUserCreate } from '../generated/user';
 
 app.post('/api/users', async (req, res) => {
   try {
-    const userData = UserSchema.parse(req.body);
-    // userData is now fully typed and validated
+    const userData = DrxUserCreateSchema.parse(req.body);
+    // userData is now fully typed and validated as DrsUserCreate
     const user = await createUser(userData);
+    res.json(user);
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid user data' });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { DrxUserUpdateSchema, type DrsUserUpdate } = await import('../generated/user');
+    const userData = DrxUserUpdateSchema.parse({ id: req.params.id, ...req.body });
+    // userData is now fully typed and validated as DrsUserUpdate
+    const user = await updateUser(userData);
     res.json(user);
   } catch (error) {
     res.status(400).json({ error: 'Invalid user data' });
