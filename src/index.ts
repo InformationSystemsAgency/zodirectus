@@ -189,8 +189,8 @@ export class Zodirectus {
         const isCircular = this.isCircularDependency(currentCollectionName, singularName, circularDeps);
         
         if (isCircular) {
-          // Use type-only import for circular dependencies to avoid runtime circular imports
-          fileContent += `import type { ${schemaName}, ${typeName} } from './${relatedFileName}';\n`;
+          // Use lazy import for circular dependencies to avoid runtime circular imports
+          fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
         } else {
           // Normal import for non-circular dependencies
           fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
@@ -203,7 +203,23 @@ export class Zodirectus {
       
       // Add schema
       if (result.schema) {
-        fileContent += result.schema + '\n\n';
+        // Handle circular dependencies by wrapping schema references in z.lazy()
+        let schemaContent = result.schema;
+        const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
+        
+        for (const singularName of relatedCollections) {
+          const isCircular = this.isCircularDependency(currentCollectionName, singularName, circularDeps);
+          if (isCircular) {
+            const schemaName = `Drx${singularName}Schema`;
+            // Replace direct schema references with lazy references for circular dependencies
+            schemaContent = schemaContent.replace(
+              new RegExp(`\\b${schemaName}\\b`, 'g'),
+              `z.lazy(() => ${schemaName})`
+            );
+          }
+        }
+        
+        fileContent += schemaContent + '\n\n';
       }
       
       // Add type
