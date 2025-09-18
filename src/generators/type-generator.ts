@@ -74,6 +74,59 @@ export class TypeGenerator {
   }
 
   /**
+   * Check if a field is an autocomplete field
+   */
+  private isAutocompleteField(field: DirectusField): boolean {
+    const interface_ = field.meta?.interface || '';
+    
+    return interface_ === 'autocomplete';
+  }
+
+  /**
+   * Generate TypeScript type for an autocomplete field
+   */
+  private generateAutocompleteType(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const suggestions = options.suggestions || [];
+    
+    if (suggestions.length > 0) {
+      // If there are predefined suggestions, create a union type
+      const suggestionValues = suggestions.map((suggestion: string) => `"${suggestion}"`).join(' | ');
+      return suggestionValues;
+    } else {
+      // If no suggestions, allow any string
+      return 'string';
+    }
+  }
+
+  /**
+   * Check if a field is a tag field
+   */
+  private isTagField(field: DirectusField): boolean {
+    const special = field.meta?.special || [];
+    const interface_ = field.meta?.interface || '';
+    
+    return special.includes('cast-json') && interface_ === 'tags';
+  }
+
+  /**
+   * Generate TypeScript type for a tag field
+   */
+  private generateTagType(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const presets = options.presets || [];
+    
+    if (presets.length > 0) {
+      // If there are predefined tags, create a union type
+      const presetValues = presets.map((preset: string) => `"${preset}"`).join(' | ');
+      return `(${presetValues})[]`;
+    } else {
+      // If no presets, allow any string array
+      return 'string[]';
+    }
+  }
+
+  /**
    * Check if a field is a repeater field
    */
   private isRepeaterField(field: DirectusField): boolean {
@@ -253,6 +306,16 @@ export class TypeGenerator {
     const directusType = field.schema?.data_type || field.type;
     const special = field.meta?.special || [];
     const options = field.meta?.options || {};
+
+    // Handle autocomplete fields
+    if (this.isAutocompleteField(field)) {
+      return this.generateAutocompleteType(field);
+    }
+
+    // Handle tag fields
+    if (this.isTagField(field)) {
+      return this.generateTagType(field);
+    }
 
     // Handle repeater fields
     if (this.isRepeaterField(field)) {

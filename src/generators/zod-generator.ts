@@ -107,6 +107,59 @@ ${omitFieldsString}
   }
 
   /**
+   * Check if a field is an autocomplete field
+   */
+  private isAutocompleteField(field: DirectusField): boolean {
+    const interface_ = field.meta?.interface || '';
+    
+    return interface_ === 'autocomplete';
+  }
+
+  /**
+   * Generate Zod schema for an autocomplete field
+   */
+  private generateAutocompleteSchema(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const suggestions = options.suggestions || [];
+    
+    if (suggestions.length > 0) {
+      // If there are predefined suggestions, create an enum for validation
+      const suggestionValues = suggestions.map((suggestion: string) => `"${suggestion}"`).join(', ');
+      return `z.enum([${suggestionValues}])`;
+    } else {
+      // If no suggestions, allow any string
+      return `z.string()`;
+    }
+  }
+
+  /**
+   * Check if a field is a tag field
+   */
+  private isTagField(field: DirectusField): boolean {
+    const special = field.meta?.special || [];
+    const interface_ = field.meta?.interface || '';
+    
+    return special.includes('cast-json') && interface_ === 'tags';
+  }
+
+  /**
+   * Generate Zod schema for a tag field
+   */
+  private generateTagSchema(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const presets = options.presets || [];
+    
+    if (presets.length > 0) {
+      // If there are predefined tags, create an enum for validation
+      const presetValues = presets.map((preset: string) => `"${preset}"`).join(', ');
+      return `z.array(z.enum([${presetValues}]))`;
+    } else {
+      // If no presets, allow any string array
+      return `z.array(z.string())`;
+    }
+  }
+
+  /**
    * Check if a field is a repeater field
    */
   private isRepeaterField(field: DirectusField): boolean {
@@ -294,6 +347,16 @@ ${omitFieldsString}
     const directusType = field.schema?.data_type || field.type;
     const special = field.meta?.special || [];
     const options = field.meta?.options || {};
+
+    // Handle autocomplete fields
+    if (this.isAutocompleteField(field)) {
+      return this.generateAutocompleteSchema(field);
+    }
+
+    // Handle tag fields
+    if (this.isTagField(field)) {
+      return this.generateTagSchema(field);
+    }
 
     // Handle repeater fields
     if (this.isRepeaterField(field)) {
