@@ -135,8 +135,9 @@ export class Zodirectus {
 
     // Write individual files for each collection
     for (const result of results) {
-      const collectionName = this.toKebabCase(result.collectionName);
-      const filePath = path.join(outputDir, `${collectionName}.ts`);
+      const singularName = this.toSingular(this.toPascalCase(result.collectionName));
+      const fileName = this.toKebabCase(singularName);
+      const filePath = path.join(outputDir, `${fileName}.ts`);
       
       let fileContent = '';
       
@@ -178,9 +179,8 @@ export class Zodirectus {
       
       // Add imports for related collections, handling circular dependencies
       for (const singularName of relatedCollections) {
-        // Map singular name back to original collection name for file path
-        const originalCollectionName = this.singularToPlural(singularName);
-        const relatedFileName = this.toKebabCase(originalCollectionName);
+        // Use singular name directly for file path (no need to map back to plural)
+        const relatedFileName = this.toKebabCase(singularName);
         const schemaName = `Drx${singularName}Schema`;
         const typeName = `Drs${singularName}`;
         
@@ -350,21 +350,21 @@ export class Zodirectus {
    */
   private toSingular(word: string): string {
     // Common plural to singular conversions
-    const pluralToSingular: Record<string, string> = {
-      'Applications': 'Application',
-      'Banks': 'Bank',
-      'Clerks': 'Clerk',
-      'Languages': 'Language',
-      'Globals': 'Global',
-      'AuditAccountabilityLogs': 'AuditAccountabilityLog',
-      'AuditActivityLogs': 'AuditActivityLog',
-      'AuditSessions': 'AuditSession',
-      'GlobalsTranslations': 'GlobalsTranslation'
-    };
+    // const pluralToSingular: Record<string, string> = {
+    //   'Applications': 'Application',
+    //   'Banks': 'Bank',
+    //   'Clerks': 'Clerk',
+    //   'Languages': 'Language',
+    //   'Globals': 'Global',
+    //   'AuditAccountabilityLogs': 'AuditAccountabilityLog',
+    //   'AuditActivityLogs': 'AuditActivityLog',
+    //   'AuditSessions': 'AuditSession',
+    //   'GlobalsTranslations': 'GlobalsTranslation'
+    // };
 
-    if (pluralToSingular[word]) {
-      return pluralToSingular[word];
-    }
+    // if (pluralToSingular[word]) {
+    //   return pluralToSingular[word];
+    // }
 
     // Generic rules for common plural patterns
     if (word.endsWith('ies')) {
@@ -385,21 +385,21 @@ export class Zodirectus {
    */
   private singularToPlural(word: string): string {
     // Reverse mapping for common conversions
-    const singularToPlural: Record<string, string> = {
-      'Application': 'Applications',
-      'Bank': 'Banks',
-      'Clerk': 'Clerks',
-      'Language': 'Languages',
-      'Global': 'Globals',
-      'AuditAccountabilityLog': 'AuditAccountabilityLogs',
-      'AuditActivityLog': 'AuditActivityLogs',
-      'AuditSession': 'AuditSessions',
-      'GlobalsTranslation': 'GlobalsTranslations'
-    };
+    // const singularToPlural: Record<string, string> = {
+    //   'Application': 'Applications',
+    //   'Bank': 'Banks',
+    //   'Clerk': 'Clerks',
+    //   'Language': 'Languages',
+    //   'Global': 'Globals',
+    //   'AuditAccountabilityLog': 'AuditAccountabilityLogs',
+    //   'AuditActivityLog': 'AuditActivityLogs',
+    //   'AuditSession': 'AuditSessions',
+    //   'GlobalsTranslation': 'GlobalsTranslations'
+    // };
 
-    if (singularToPlural[word]) {
-      return singularToPlural[word];
-    }
+    // if (singularToPlural[word]) {
+    //   return singularToPlural[word];
+    // }
 
     // Generic rules for common singular patterns
     if (word.endsWith('y')) {
