@@ -1,98 +1,107 @@
-# Installation Guide
+# Simple Zodirectus Integration
 
-## GitHub-Only Hosting
+This project integrates [zodirectus](https://github.com/InformationSystemsAgency/zodirectus) to automatically generate TypeScript types and Zod schemas from your Directus instance.
 
-Zodirectus is currently hosted only on GitHub. Here are the ways to install and use it:
+## Setup
 
-## Method 1: Install from GitHub (Recommended)
+1. **Install required packages:**
+   ```bash
+   pnpm add zodirectus@github:InformationSystemsAgency/zodirectus dotenv
+   ```
 
-### As a dependency in your project
-```bash
-pnpm add https://github.com/InformationSystemsAgency/zodirectus.git
-```
+2. **Configure environment variables:**
+   Edit `.env` with your Directus credentials:
+   ```env
+   DIRECTUS_URL=http://localhost:8055
+   DIRECTUS_TOKEN=your-access-token-here
+   ```
 
-### Install globally for CLI usage
-```bash
-pnpm add -g https://github.com/InformationSystemsAgency/zodirectus.git
-```
+3. **Add script:**
+   Create `scripts/generate-types.js`:
+   ```javascript
+   #!/usr/bin/env node
 
-## Method 2: Clone and build locally
+   import { config } from 'dotenv';
+   import { execSync } from 'child_process';
 
-### For development or custom builds
-```bash
-# Clone the repository
-git clone https://github.com/InformationSystemsAgency/zodirectus.git
-cd zodirectus
+   // Load environment variables from .env file
+   config();
 
-# Install dependencies
-pnpm install
+   const DIRECTUS_URL = process.env.DIRECTUS_URL;
+   const DIRECTUS_TOKEN = process.env.DIRECTUS_TOKEN;
 
-# Build the project
-pnpm run build
+   // Check if required environment variables are set
+   if (!DIRECTUS_URL) {
+       console.error('Error: DIRECTUS_URL is not set in .env file');
+       process.exit(1);
+   }
 
-# Use the CLI locally
-node dist/cli.js --help
-```
+   if (!DIRECTUS_TOKEN || DIRECTUS_TOKEN === 'your-access-token-here') {
+       console.error('Error: DIRECTUS_TOKEN is not set or still has placeholder value in .env file');
+       console.error('Please update your .env file with a real Directus access token');
+       process.exit(1);
+   }
 
-## Method 3: Use in your project
+   try {
+       console.log(`Generating types from Directus at: ${DIRECTUS_URL}`);
+       
+       // Run zodirectus generate command
+       const command = `zodirectus generate --url "${DIRECTUS_URL}" --token "${DIRECTUS_TOKEN}" --output src/types/directus`;
+       execSync(command, { stdio: 'inherit' });
+       
+       console.log('Types generated successfully!');
+   } catch (error) {
+       console.error('Error generating types:', error.message);
+       process.exit(1);
+   }
+   ```
 
-### Import as a library
+4. **Config in package json**
+   ```json
+   {
+     "scripts": {
+       "generate-types": "node scripts/generate-types.js"
+     },
+     "dependencies": {
+       "zodirectus": "github:InformationSystemsAgency/zodirectus",
+       "dotenv": "^17.2.2"
+     }
+   }
+   ```
+
+4. **Run generator**
+   ```bash
+   pnpm run generate-types
+   ```
+
+## Generated Files
+
+The generator creates TypeScript files in `src/types/directus/`:
+
+- **Individual collection files** (e.g., `application.ts`, `bank.ts`) - Contains Zod schemas and TypeScript interfaces for each collection
+- **`schemas.ts`** - Consolidated Zod schemas
+- **`types.ts`** - Consolidated TypeScript types
+- **`file-schemas.ts`** - File-related schemas
+
+## Usage in Your Code
+
 ```typescript
-import { Zodirectus } from 'zodirectus';
+import { DsxApplicationSchema, type DsxApplication } from './types/directus/application';
+import { zValidator } from '@hono/zod-validator';
 
-const zodirectus = new Zodirectus({
-  directusUrl: 'https://your-directus.com',
-  token: 'your-token',
+// Use in Hono routes
+app.post('/applications', zValidator('json', DsxApplicationSchema), (c) => {
+  const applicationData = c.req.valid('json');
+  // applicationData is fully typed as DsxApplication
+  return c.json(applicationData);
 });
-
-const results = await zodirectus.generate();
-```
-
-### Use the CLI
-```bash
-# If installed globally
-zodirectus --url https://your-directus.com --token your-token
-
-# If installed locally in project
-npx zodirectus --url https://your-directus.com --token your-token
-
-# If built locally
-node dist/cli.js --url https://your-directus.com --token your-token
 ```
 
 ## Troubleshooting
+- **Authentication errors**: Check your `DIRECTUS_TOKEN` in `.env`
+- **Connection errors**: Verify `DIRECTUS_URL` is correct and accessible
+- **Type errors**: The generated files use `z.lazy()` for circular references - this is normal
 
-### Command not found
-If you get "command not found" error after global installation:
-
-1. Check if the global bin directory is in your PATH:
-   ```bash
-   pnpm config get global-bin-dir
-   ```
-
-2. Add it to your PATH if needed:
-   ```bash
-   export PATH="$(pnpm config get global-bin-dir):$PATH"
-   ```
-
-### Permission issues
-If you get permission errors during global installation:
-
-```bash
-# Use sudo (not recommended)
-sudo pnpm add -g https://github.com/yourusername/zodirectus.git
-
-# Or configure pnpm to use a different directory
-pnpm config set global-bin-dir ~/.local/bin
-```
-
-## Future: npm Publishing
-
-When the package is ready for npm publishing, installation will be simpler:
-
-```bash
-pnpm add zodirectus
-pnpm add -g zodirectus
 ```
 
 ## Support

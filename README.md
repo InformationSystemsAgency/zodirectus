@@ -7,6 +7,8 @@ Generate Zod schemas and TypeScript types from Directus collections automaticall
 
 ## Installation
 
+📖 **For detailed and simple installation instructions, see [INSTALLATION.md](./INSTALLATION.md)**
+
 ### From GitHub
 ```bash
 # Install directly from GitHub
@@ -238,6 +240,40 @@ Zodirectus automatically maps Directus field types to appropriate Zod schemas an
 | `date` | `z.string().date()` | `string` |
 | `datetime` | `z.string().datetime()` | `string` |
 | `json` | `z.any()` | `any` |
+
+## Supported Directus Field Types
+
+Zodirectus handles the following Directus field types and interfaces:
+
+### Basic Field Types
+- **String Fields**: `varchar`, `text`, `character varying`
+- **Numeric Fields**: `integer`, `bigint`, `decimal`, `float`, `numeric`, `real`
+- **Boolean Fields**: `boolean`
+- **Date/Time Fields**: `date`, `datetime`, `timestamp`, `time`
+- **UUID Fields**: `uuid`
+- **JSON Fields**: `json`, `jsonb`
+
+### Special Field Types
+- **File Fields**: `file` interface → Single file object
+- **Image File Fields**: `file-image` interface → Image file object with dimensions
+- **Multiple Files**: `files` interface → Array of file objects
+- **Repeater Fields**: `repeater` type → Array of objects with sub-fields
+- **Tag Fields**: `tag` interface → Array of strings or enums
+- **Autocomplete Fields**: `autocomplete` interface → String with suggestions
+- **Checkbox Tree Fields**: `select-multiple-checkbox-tree` interface → Array of enums from hierarchical structure
+- **Dropdown Multiple Fields**: `select-multiple-dropdown` interface → Array of enums
+- **Radio Button Fields**: `select-radio` interface → Single enum value
+- **Choice Fields**: Fields with `choices` or `options` → Enum validation
+
+### Relation Fields
+- **Many-to-One (M2O)**: References to other collections
+- **One-to-Many (O2M)**: Arrays of related collection objects
+- **Many-to-Any (M2A)**: Polymorphic relations
+
+### System Fields
+- **Hidden Fields**: `user_created`, `user_updated`, `date_created`, `date_updated`, `status`, `sort`
+- **ID Fields**: Automatically added if missing from collection
+- **Divider Fields**: Automatically excluded from generation
 
 ## Custom Field Mappings
 
