@@ -107,6 +107,184 @@ ${omitFieldsString}
   }
 
   /**
+   * Check if a field is a file field
+   */
+  private isFileField(field: DirectusField): boolean {
+    const special = field.meta?.special || [];
+    const interface_ = field.meta?.interface || '';
+    
+    return special.includes('file') || 
+           special.includes('files') ||
+           interface_ === 'file' || 
+           interface_ === 'file-image' ||
+           interface_ === 'files';
+  }
+
+  /**
+   * Generate Zod schema for a file field
+   */
+  private generateFileSchema(field: DirectusField): string {
+    const interface_ = field.meta?.interface || '';
+    const special = field.meta?.special || [];
+    
+    if (interface_ === 'files' || special.includes('files')) {
+      // Multiple files - return array of file objects
+      return 'z.array(DirectusFileSchema)';
+    } else if (interface_ === 'file-image') {
+      return 'DirectusImageFileSchema';
+    } else {
+      return 'DirectusFileSchema';
+    }
+  }
+
+  /**
+   * Check if a field is a radio button field
+   */
+  private isRadioButtonField(field: DirectusField): boolean {
+    const interface_ = field.meta?.interface || '';
+    
+    return interface_ === 'select-radio';
+  }
+
+  /**
+   * Generate Zod schema for a radio button field
+   */
+  private generateRadioButtonSchema(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const choices = options.choices || [];
+    
+    if (choices.length > 0) {
+      // Extract all possible values from the choices
+      const values = choices.map((choice: any) => choice.value);
+      const uniqueValues = [...new Set(values)]; // Remove duplicates
+      const valuesString = uniqueValues.map(v => `"${v}"`).join(', ');
+      
+      return `z.enum([${valuesString}])`;
+    } else {
+      // If no choices, allow any string
+      return `z.string()`;
+    }
+  }
+
+  /**
+   * Check if a field is a dropdown_multiple field
+   */
+  private isDropdownMultipleField(field: DirectusField): boolean {
+    const interface_ = field.meta?.interface || '';
+    
+    return interface_ === 'select-multiple-dropdown';
+  }
+
+  /**
+   * Generate Zod schema for a dropdown_multiple field
+   */
+  private generateDropdownMultipleSchema(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const choices = options.choices || [];
+    
+    if (choices.length > 0) {
+      // Extract all possible values from the choices
+      const values = choices.map((choice: any) => choice.value);
+      const uniqueValues = [...new Set(values)]; // Remove duplicates
+      const valuesString = uniqueValues.map(v => `"${v}"`).join(', ');
+      
+      return `z.array(z.enum([${valuesString}]))`;
+    } else {
+      // If no choices, allow any string array
+      return `z.array(z.string())`;
+    }
+  }
+
+  /**
+   * Check if a field is a checkbox_tree field
+   */
+  private isCheckboxTreeField(field: DirectusField): boolean {
+    const interface_ = field.meta?.interface || '';
+    
+    return interface_ === 'select-multiple-checkbox-tree';
+  }
+
+  /**
+   * Generate Zod schema for a checkbox_tree field
+   */
+  private generateCheckboxTreeSchema(field: DirectusField): string {
+    const options = field.meta?.options || {};
+    const choices = options.choices || [];
+    
+    if (choices.length > 0) {
+      // Extract all possible values from the tree structure
+      const extractValues = (items: any[]): string[] => {
+        const values: string[] = [];
+        items.forEach(item => {
+          if (item.value) {
+            values.push(item.value);
+          }
+          if (item.children && Array.isArray(item.children)) {
+            values.push(...extractValues(item.children));
+          }
+        });
+        return values;
+      };
+      
+      const allValues = extractValues(choices);
+      const uniqueValues = [...new Set(allValues)];
+      const valuesString = uniqueValues.map(v => `"${v}"`).join(', ');
+      
+      return `z.array(z.enum([${valuesString}]))`;
+    } else {
+      // If no choices, allow any string array
+      return `z.array(z.string())`;
+    }
+  }
+
+  /**
+   * Check if a field is a date/time field
+   */
+  private isDateTimeField(field: DirectusField): boolean {
+    const directusType = field.schema?.data_type || field.type;
+    const interface_ = field.meta?.interface || '';
+    
+    // Check for specific date/time types
+    if (directusType === 'timestamp' || directusType === 'datetime' || directusType === 'date' || directusType === 'time') {
+      return true;
+    }
+    
+    // Check for date/time interfaces
+    if (interface_ === 'datetime' || interface_ === 'date' || interface_ === 'time') {
+      return true;
+    }
+    
+    // Check field names that suggest date/time
+    const fieldName = field.field.toLowerCase();
+    if (fieldName.includes('date') || fieldName.includes('time') || fieldName === 'ts') {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Generate Zod schema for a date/time field
+   */
+  private generateDateTimeSchema(field: DirectusField): string {
+    const directusType = field.schema?.data_type || field.type;
+    const interface_ = field.meta?.interface || '';
+    const fieldName = field.field.toLowerCase();
+    
+    // Determine the appropriate Zod type based on field characteristics
+    if (directusType === 'date' || interface_ === 'date' || fieldName === 'date') {
+      return `z.string().date()`;
+    } else if (directusType === 'time' || interface_ === 'time' || fieldName === 'time') {
+      return `z.string().time()`;
+    } else if (directusType === 'timestamp' || directusType === 'datetime' || interface_ === 'datetime' || fieldName.includes('datetime') || fieldName === 'ts') {
+      return `z.string().datetime()`;
+    } else {
+      // Default to datetime for any date/time related field
+      return `z.string().datetime()`;
+    }
+  }
+
+  /**
    * Check if a field is an autocomplete field
    */
   private isAutocompleteField(field: DirectusField): boolean {
@@ -348,6 +526,31 @@ ${omitFieldsString}
     const special = field.meta?.special || [];
     const options = field.meta?.options || {};
 
+    // Handle file fields
+    if (this.isFileField(field)) {
+      return this.generateFileSchema(field);
+    }
+
+    // Handle radio button fields
+    if (this.isRadioButtonField(field)) {
+      return this.generateRadioButtonSchema(field);
+    }
+
+    // Handle dropdown_multiple fields
+    if (this.isDropdownMultipleField(field)) {
+      return this.generateDropdownMultipleSchema(field);
+    }
+
+    // Handle checkbox_tree fields
+    if (this.isCheckboxTreeField(field)) {
+      return this.generateCheckboxTreeSchema(field);
+    }
+
+    // Handle date/time fields
+    if (this.isDateTimeField(field)) {
+      return this.generateDateTimeSchema(field);
+    }
+
     // Handle autocomplete fields
     if (this.isAutocompleteField(field)) {
       return this.generateAutocompleteSchema(field);
@@ -389,12 +592,28 @@ ${omitFieldsString}
     // Handle enum/choice fields with predefined values
     if (options.choices && Array.isArray(options.choices) && options.choices.length > 0) {
       const choices = options.choices.map((choice: any) => {
+        let value;
         if (typeof choice === 'string') {
-          return `"${choice}"`;
+          value = choice;
         } else if (choice && typeof choice === 'object' && choice.value) {
-          return `"${choice.value}"`;
+          value = choice.value;
+        } else {
+          value = choice;
         }
-        return `"${choice}"`;
+        
+        // Convert value based on field data type
+        if (directusType === 'integer' || directusType === 'bigint') {
+          const numValue = parseInt(value, 10);
+          return isNaN(numValue) ? value : numValue;
+        } else if (directusType === 'decimal' || directusType === 'float' || directusType === 'real') {
+          const numValue = parseFloat(value);
+          return isNaN(numValue) ? value : numValue;
+        } else if (directusType === 'boolean') {
+          return value === 'true' || value === true;
+        } else {
+          // Default to string
+          return `"${value}"`;
+        }
       }).join(', ');
       
       return `z.enum([${choices}])`;
@@ -403,14 +622,30 @@ ${omitFieldsString}
     // Handle dropdown/select fields with options
     if (options.options && Array.isArray(options.options) && options.options.length > 0) {
       const choices = options.options.map((option: any) => {
+        let value;
         if (typeof option === 'string') {
-          return `"${option}"`;
+          value = option;
         } else if (option && typeof option === 'object' && option.value) {
-          return `"${option.value}"`;
+          value = option.value;
         } else if (option && typeof option === 'object' && option.text) {
-          return `"${option.text}"`;
+          value = option.text;
+        } else {
+          value = option;
         }
-        return `"${option}"`;
+        
+        // Convert value based on field data type
+        if (directusType === 'integer' || directusType === 'bigint') {
+          const numValue = parseInt(value, 10);
+          return isNaN(numValue) ? value : numValue;
+        } else if (directusType === 'decimal' || directusType === 'float' || directusType === 'real') {
+          const numValue = parseFloat(value);
+          return isNaN(numValue) ? value : numValue;
+        } else if (directusType === 'boolean') {
+          return value === 'true' || value === true;
+        } else {
+          // Default to string
+          return `"${value}"`;
+        }
       }).join(', ');
       
       return `z.enum([${choices}])`;

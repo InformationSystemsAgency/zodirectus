@@ -142,6 +142,291 @@ export class Zodirectus {
   }
 
   /**
+   * Write file schemas to the output directory based on actual Directus file collection structure
+   */
+  private async writeFileSchemas(outputDir: string): Promise<void> {
+    const fileSchemasPath = path.join(outputDir, 'file-schemas.ts');
+    
+    try {
+      // Try to fetch the actual file collection structure from Directus
+      const fileCollection = await this.client.getCollectionWithFields('directus_files');
+      const fileFields = fileCollection.fields;
+      
+      // Generate schemas based on actual Directus file collection structure
+      const fileSchemaFields = this.generateFileSchemaFields(fileFields);
+      const imageFileSchemaFields = this.generateFileSchemaFields(fileFields);
+      
+      const fileSchemasContent = `import { z } from 'zod';
+
+/**
+ * Directus file object schema (generated from actual Directus structure)
+ */
+export const DirectusFileSchema = z.object({
+${fileSchemaFields}
+});
+
+/**
+ * Directus image file object schema (generated from actual Directus structure)
+ */
+export const DirectusImageFileSchema = z.object({
+${imageFileSchemaFields}
+});
+
+/**
+ * TypeScript interfaces for Directus file objects
+ */
+export interface DirectusFile {
+${this.generateFileInterfaceFields(fileFields)}
+}
+
+export interface DirectusImageFile {
+${this.generateImageFileInterfaceFields(fileFields)}
+}
+`;
+
+      fs.writeFileSync(fileSchemasPath, fileSchemasContent);
+      console.log(`Generated: ${fileSchemasPath}`);
+    } catch (error) {
+      console.log('Could not fetch file collection structure, using fallback schema');
+      // Fallback to static schema if we can't access the file collection
+      const fallbackContent = `import { z } from 'zod';
+
+/**
+ * Directus file object schema (fallback)
+ */
+export const DirectusFileSchema = z.object({
+  id: z.string().uuid(),
+  filename_disk: z.string(),
+  filename_download: z.string(),
+  title: z.string().optional(),
+  type: z.string(),
+  folder: z.string().uuid().optional(),
+  uploaded_by: z.string().uuid().optional(),
+  uploaded_on: z.string().datetime(),
+  modified_by: z.string().uuid().optional(),
+  modified_on: z.string().datetime(),
+  charset: z.string().optional(),
+  filesize: z.number().int(),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional()
+});
+
+/**
+ * Directus image file object schema (fallback)
+ */
+export const DirectusImageFileSchema = z.object({
+  id: z.string().uuid(),
+  filename_disk: z.string(),
+  filename_download: z.string(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  type: z.string(),
+  folder: z.string().uuid().optional(),
+  uploaded_by: z.string().uuid().optional(),
+  uploaded_on: z.string().datetime(),
+  modified_by: z.string().uuid().optional(),
+  modified_on: z.string().datetime(),
+  charset: z.string().optional(),
+  filesize: z.number().int(),
+  width: z.number().int().optional(),
+  height: z.number().int().optional(),
+  duration: z.number().optional(),
+  embed: z.string().optional(),
+  location: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.any()).optional()
+});
+
+/**
+ * TypeScript interfaces for Directus file objects (fallback)
+ */
+export interface DirectusFile {
+  id: string;
+  filename_disk: string;
+  filename_download: string;
+  title?: string;
+  type: string;
+  folder?: string;
+  uploaded_by?: string;
+  uploaded_on: string;
+  modified_by?: string;
+  modified_on: string;
+  charset?: string;
+  filesize: number;
+  description?: string;
+  location?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface DirectusImageFile {
+  id: string;
+  filename_disk: string;
+  filename_download: string;
+  title?: string;
+  description?: string;
+  type: string;
+  folder?: string;
+  uploaded_by?: string;
+  uploaded_on: string;
+  modified_by?: string;
+  modified_on: string;
+  charset?: string;
+  filesize: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  embed?: string;
+  location?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+}
+`;
+
+      fs.writeFileSync(fileSchemasPath, fallbackContent);
+      console.log(`Generated: ${fileSchemasPath} (fallback)`);
+    }
+  }
+
+  /**
+   * Generate Zod schema fields for file objects based on actual Directus structure
+   */
+  private generateFileSchemaFields(fileFields: any[]): string {
+    const fields: string[] = [];
+    
+    for (const field of fileFields) {
+      const fieldName = field.field;
+      const dataType = field.schema?.data_type || field.type;
+      const isNullable = field.schema?.is_nullable;
+      const isOptional = !field.schema?.is_nullable && !field.schema?.is_primary_key;
+      
+      let zodType = '';
+      
+      switch (dataType) {
+        case 'uuid':
+          zodType = 'z.string().uuid()';
+          break;
+        case 'varchar':
+        case 'text':
+        case 'string':
+        case 'character varying':
+          zodType = 'z.string()';
+          break;
+        case 'integer':
+        case 'bigint':
+        case 'int':
+          zodType = 'z.number().int()';
+          break;
+        case 'float':
+        case 'decimal':
+        case 'numeric':
+        case 'real':
+          zodType = 'z.number()';
+          break;
+        case 'boolean':
+          zodType = 'z.boolean()';
+          break;
+        case 'json':
+        case 'jsonb':
+          zodType = 'z.record(z.any())';
+          break;
+        case 'timestamp':
+        case 'datetime':
+        case 'timestamp with time zone':
+          zodType = 'z.string().datetime()';
+          break;
+        case 'date':
+          zodType = 'z.string().date()';
+          break;
+        case 'time':
+          zodType = 'z.string().time()';
+          break;
+        default:
+          zodType = 'z.any()';
+      }
+      
+      if (isOptional) {
+        zodType += '.optional()';
+      }
+      
+      fields.push(`  ${fieldName}: ${zodType}`);
+    }
+    
+    return fields.join(',\n');
+  }
+
+  /**
+   * Generate TypeScript interface fields for file objects based on actual Directus structure
+   */
+  private generateFileInterfaceFields(fileFields: any[]): string {
+    const fields: string[] = [];
+    
+    for (const field of fileFields) {
+      const fieldName = field.field;
+      const dataType = field.schema?.data_type || field.type;
+      const isNullable = field.schema?.is_nullable;
+      const isOptional = !field.schema?.is_nullable && !field.schema?.is_primary_key;
+      
+      let tsType = '';
+      
+      switch (dataType) {
+        case 'uuid':
+          tsType = 'string';
+          break;
+        case 'varchar':
+        case 'text':
+        case 'string':
+        case 'character varying':
+          tsType = 'string';
+          break;
+        case 'integer':
+        case 'bigint':
+        case 'int':
+          tsType = 'number';
+          break;
+        case 'float':
+        case 'decimal':
+        case 'numeric':
+        case 'real':
+          tsType = 'number';
+          break;
+        case 'boolean':
+          tsType = 'boolean';
+          break;
+        case 'json':
+        case 'jsonb':
+          tsType = 'Record<string, any>';
+          break;
+        case 'timestamp':
+        case 'datetime':
+        case 'timestamp with time zone':
+        case 'date':
+        case 'time':
+          tsType = 'string';
+          break;
+        default:
+          tsType = 'any';
+      }
+      
+      const optionalMarker = isOptional ? '?' : '';
+      fields.push(`  ${fieldName}${optionalMarker}: ${tsType};`);
+    }
+    
+    return fields.join('\n');
+  }
+
+  /**
+   * Generate TypeScript interface fields for image file objects (same as file but with image-specific fields)
+   */
+  private generateImageFileInterfaceFields(fileFields: any[]): string {
+    // For now, use the same fields as regular files
+    // In a real implementation, we might want to add image-specific fields
+    return this.generateFileInterfaceFields(fileFields);
+  }
+
+  /**
    * Write generated files to the output directory
    */
   private async writeFiles(results: GeneratedSchema[]): Promise<void> {
@@ -151,6 +436,9 @@ export class Zodirectus {
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
+
+    // Write file schemas first
+    await this.writeFileSchemas(outputDir);
 
     // Build dependency graph and detect circular dependencies
     const dependencyGraph = this.buildDependencyGraph(results);
@@ -203,6 +491,11 @@ export class Zodirectus {
       // Add imports
       if (result.schema) {
         fileContent += `import { z } from 'zod';\n`;
+      }
+      
+      // Add file schemas import if file fields are present
+      if (result.schema && (result.schema.includes('DirectusFileSchema') || result.schema.includes('DirectusImageFileSchema'))) {
+        fileContent += `import { DirectusFileSchema, DirectusImageFileSchema, type DirectusFile, type DirectusImageFile } from './file-schemas';\n`;
       }
       
       // Add imports for related collections, handling circular dependencies
