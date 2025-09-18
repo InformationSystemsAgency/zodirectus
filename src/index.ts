@@ -161,25 +161,25 @@ export class Zodirectus {
 /**
  * Directus file object schema (generated from actual Directus structure)
  */
-export const DirectusFileSchema = z.object({
+export const DrxFileSchema = z.object({
 ${fileSchemaFields}
 });
 
 /**
  * Directus image file object schema (generated from actual Directus structure)
  */
-export const DirectusImageFileSchema = z.object({
+export const DrxImageFileSchema = z.object({
 ${imageFileSchemaFields}
 });
 
 /**
  * TypeScript interfaces for Directus file objects
  */
-export interface DirectusFile {
+export interface DrsFile {
 ${this.generateFileInterfaceFields(fileFields)}
 }
 
-export interface DirectusImageFile {
+export interface DrsImageFile {
 ${this.generateImageFileInterfaceFields(fileFields)}
 }
 `;
@@ -194,7 +194,7 @@ ${this.generateImageFileInterfaceFields(fileFields)}
 /**
  * Directus file object schema (fallback)
  */
-export const DirectusFileSchema = z.object({
+export const DrxFileSchema = z.object({
   id: z.string().uuid(),
   filename_disk: z.string(),
   filename_download: z.string(),
@@ -216,7 +216,7 @@ export const DirectusFileSchema = z.object({
 /**
  * Directus image file object schema (fallback)
  */
-export const DirectusImageFileSchema = z.object({
+export const DrxImageFileSchema = z.object({
   id: z.string().uuid(),
   filename_disk: z.string(),
   filename_download: z.string(),
@@ -242,7 +242,7 @@ export const DirectusImageFileSchema = z.object({
 /**
  * TypeScript interfaces for Directus file objects (fallback)
  */
-export interface DirectusFile {
+export interface DrsFile {
   id: string;
   filename_disk: string;
   filename_download: string;
@@ -261,7 +261,7 @@ export interface DirectusFile {
   metadata?: Record<string, any>;
 }
 
-export interface DirectusImageFile {
+export interface DrsImageFile {
   id: string;
   filename_disk: string;
   filename_download: string;
@@ -465,8 +465,10 @@ export interface DirectusImageFile {
           if (schemaMatches) {
             schemaMatches.forEach(match => {
               const singularName = match.replace('Drx', '').replace('Schema', '');
-              // Don't import from self
-              if (singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
+              // Don't import from self and skip file schemas
+              if (singularName !== this.toSingular(this.toPascalCase(result.collectionName)) &&
+                  singularName !== 'File' && 
+                  singularName !== 'ImageFile') {
                 relatedCollections.add(singularName);
               }
             });
@@ -480,8 +482,13 @@ export interface DirectusImageFile {
         if (typeMatches) {
           typeMatches.forEach(match => {
             const singularName = match.replace('Drs', '');
-            // Skip Create, Update, Get types and don't import from self
-            if (!singularName.endsWith('Create') && !singularName.endsWith('Update') && !singularName.endsWith('Get') && singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
+            // Skip Create, Update, Get types, file types, and don't import from self
+            if (!singularName.endsWith('Create') && 
+                !singularName.endsWith('Update') && 
+                !singularName.endsWith('Get') && 
+                singularName !== 'File' && 
+                singularName !== 'ImageFile' &&
+                singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
               relatedCollections.add(singularName);
             }
           });
@@ -494,8 +501,8 @@ export interface DirectusImageFile {
       }
       
       // Add file schemas import if file fields are present
-      if (result.schema && (result.schema.includes('DirectusFileSchema') || result.schema.includes('DirectusImageFileSchema'))) {
-        fileContent += `import { DirectusFileSchema, DirectusImageFileSchema, type DirectusFile, type DirectusImageFile } from './file-schemas';\n`;
+      if (result.schema && (result.schema.includes('DrxFileSchema') || result.schema.includes('DrxImageFileSchema'))) {
+        fileContent += `import { DrxFileSchema, DrxImageFileSchema, type DrsFile, type DrsImageFile } from './file-schemas';\n`;
       }
       
       // Add imports for related collections, handling circular dependencies

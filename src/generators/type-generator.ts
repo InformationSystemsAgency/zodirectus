@@ -96,11 +96,11 @@ export class TypeGenerator {
     
     if (interface_ === 'files' || special.includes('files')) {
       // Multiple files - return array of file objects
-      return 'DirectusFile[]';
+      return 'DrsFile[]';
     } else if (interface_ === 'file-image') {
-      return 'DirectusImageFile';
+      return 'DrsImageFile';
     } else {
-      return 'DirectusFile';
+      return 'DrsFile';
     }
   }
 

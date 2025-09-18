@@ -129,11 +129,11 @@ ${omitFieldsString}
     
     if (interface_ === 'files' || special.includes('files')) {
       // Multiple files - return array of file objects
-      return 'z.array(DirectusFileSchema)';
+      return 'z.array(DrxFileSchema)';
     } else if (interface_ === 'file-image') {
-      return 'DirectusImageFileSchema';
+      return 'DrxImageFileSchema';
     } else {
-      return 'DirectusFileSchema';
+      return 'DrxFileSchema';
     }
   }
 
