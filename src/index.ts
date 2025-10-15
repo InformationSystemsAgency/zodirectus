@@ -26,8 +26,8 @@ export class Zodirectus {
     };
     
     this.client = new DirectusClient(this.config);
-    this.zodGenerator = new ZodGenerator(this.config);
-    this.typeGenerator = new TypeGenerator(this.config);
+    this.zodGenerator = new ZodGenerator(this.config, this.client);
+    this.typeGenerator = new TypeGenerator(this.config, this.client);
   }
 
   /**
@@ -37,6 +37,10 @@ export class Zodirectus {
     try {
       // Authenticate with Directus
       await this.client.authenticate();
+
+      // Load relationships data for proper M2M field resolution
+      await this.zodGenerator.setRelationships();
+      await this.typeGenerator.setRelationships();
 
       // Get collections
       const collections = await this.client.getCollections();
@@ -51,10 +55,27 @@ export class Zodirectus {
         ? targetCollections
         : targetCollections.filter(c => !c.collection.startsWith('directus_'));
 
+      // Filter out folders/groups (they don't have actual data)
+      const actualCollections = filteredCollections.filter(c => {
+        // Only filter out specific known folders, not based on schema or naming patterns
+        const isCommonFolder = ['Dialogues', 'Expert_System', 'Models', 'settings'].includes(c.collection);
+        
+        // Log what we're filtering out for debugging
+        if (isCommonFolder) {
+          console.log(`Filtering out folder: ${c.collection}`);
+        }
+        
+        return !isCommonFolder;
+      });
+
+      console.log(`Found ${collections.length} total collections`);
+      console.log(`After filtering: ${actualCollections.length} collections to process`);
+      console.log('Collections to process:', actualCollections.map(c => c.collection));
+
       const results: GeneratedSchema[] = [];
 
       // Generate schemas and types for each collection
-      for (const collection of filteredCollections) {
+      for (const collection of actualCollections) {
         try {
           const collectionWithFields = await this.client.getCollectionWithFields(collection.collection);
           
@@ -97,7 +118,7 @@ export class Zodirectus {
           
           if (isPartOfCircularDependency) {
             // Find the collection and regenerate with lazy schemas
-            const collection = filteredCollections.find(c => c.collection === result.collectionName);
+            const collection = actualCollections.find(c => c.collection === result.collectionName);
             if (collection) {
               const collectionWithFields = await this.client.getCollectionWithFields(collection.collection);
               result.schema = this.zodGenerator.generateSchema(collectionWithFields, true);

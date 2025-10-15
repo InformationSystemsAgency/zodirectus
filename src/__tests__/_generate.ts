@@ -4,9 +4,10 @@ async function generate() {
   console.log('Starting generation...');
   const zodirectus = new Zodirectus({
     directusUrl: 'http://localhost:8055',
-    token: 'OM81Do6DiEU5KCd12QnKpeb9AkSmWrVD',
+    token: 'd2hRayaSOoOuVHfEuuw1W2DAqdxXHonG',
     // collections: ['applications'], // Only generate for applications collection
     outputDir: './generated',
+    includeSystemCollections: true,
   });
 
   console.log('Generating schemas and types...');

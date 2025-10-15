@@ -7,9 +7,27 @@ import { DirectusCollectionWithFields, DirectusField, ZodirectusConfig, Generate
  */
 export class ZodGenerator {
   private config: ZodirectusConfig;
+  private relationships: any[] = [];
+  private client: any;
 
-  constructor(config: ZodirectusConfig) {
+  constructor(config: ZodirectusConfig, client?: any) {
     this.config = config;
+    this.client = client;
+  }
+
+  /**
+   * Set relationships data for proper M2M field resolution
+   */
+  async setRelationships(): Promise<void> {
+    if (this.client) {
+      try {
+        this.relationships = await this.client.getRelationships();
+        console.log(`Loaded ${this.relationships.length} relationships from Directus`);
+      } catch (error) {
+        console.warn('Could not load relationships:', error);
+        this.relationships = [];
+      }
+    }
   }
 
   /**
@@ -35,6 +53,7 @@ export class ZodGenerator {
 
     if (isCircularDependency) {
       // For circular dependencies, generate lazy schemas
+      const debugInfo = this.generateRelationshipDebugInfo(collection);
       const baseSchema = `export const ${schemaName}: z.ZodType<any> = z.lazy(() => z.object({
     ${fieldsString}
 }));`;
@@ -57,9 +76,10 @@ ${omitFieldsString}
       const getSchemaName = schemaName.replace('Schema', 'GetSchema');
       const getSchema = `export const ${getSchemaName}: z.ZodType<any> = z.lazy(() => ${schemaName});`;
 
-      return `${baseSchema}\n\n${createSchema}\n\n${updateSchema}\n\n${getSchema}`;
+      return `${debugInfo}${baseSchema}\n\n${createSchema}\n\n${updateSchema}\n\n${getSchema}`;
     } else {
       // For non-circular dependencies, generate normal schemas
+      const debugInfo = this.generateRelationshipDebugInfo(collection);
       const baseSchema = `export const ${schemaName} = z.object({
     ${fieldsString}
 });`;
@@ -82,7 +102,7 @@ ${omitFieldsString}
       const getSchemaName = schemaName.replace('Schema', 'GetSchema');
       const getSchema = `export const ${getSchemaName} = ${schemaName};`;
 
-      return `${baseSchema}\n\n${createSchema}\n\n${updateSchema}\n\n${getSchema}`;
+      return `${debugInfo}${baseSchema}\n\n${createSchema}\n\n${updateSchema}\n\n${getSchema}`;
     }
   }
 
@@ -464,9 +484,92 @@ ${omitFieldsString}
     return special.includes('m2o') || 
            special.includes('o2m') || 
            special.includes('m2a') ||
+           special.includes('m2m') ||
            interface_.includes('m2o') ||
            interface_.includes('o2m') ||
-           interface_.includes('m2a');
+           interface_.includes('m2a') ||
+           interface_.includes('m2m') ||
+           interface_.includes('many-to-many') ||
+           this.isManyToManyJunctionField(field);
+  }
+
+  /**
+   * Check if a field is a many-to-many junction field
+   */
+  private isManyToManyJunctionField(field: DirectusField): boolean {
+    const fieldName = field.field;
+    const options = field.meta?.options || {};
+    const special = field.meta?.special || [];
+    
+    // Don't mark M2O fields as M2M junction fields - they are different
+    if (special.includes('m2o')) {
+      return false;
+    }
+    
+    // Check for common many-to-many patterns
+    // 1. Junction tables often have names like: table1_table2, table1_table2_id, etc.
+    // 2. Fields that reference junction tables
+    // 3. Fields with junction_table option
+    if (options.junction_table) {
+      return true;
+    }
+    
+    // Check for many-to-many interface
+    const interface_ = field.meta?.interface || '';
+    if (interface_.includes('m2m') || interface_.includes('many-to-many')) {
+      return true;
+    }
+    
+    // Check for explicit M2M special type
+    if (special.includes('m2m')) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if a collection is a junction table for many-to-many relationships
+   */
+  private isJunctionTable(collection: DirectusCollectionWithFields): boolean {
+    const collectionName = collection.collection;
+    const fields = collection.fields || [];
+    
+    // Junction tables typically have:
+    // 1. Two or more foreign key fields
+    // 2. Naming patterns like: table1_table2, junction_table_name, etc.
+    // 3. Simple structure with mostly foreign keys
+    
+    // Check naming patterns
+    if (collectionName.includes('_') && (
+      collectionName.includes('_junction') ||
+      collectionName.includes('_link') ||
+      collectionName.includes('_relation')
+    )) {
+      return true;
+    }
+    
+    // Check if it has exactly 2 foreign key fields (typical for M2M junction)
+    const foreignKeyFields = fields.filter(field => 
+      field.schema?.foreign_key_table || 
+      field.meta?.special?.includes('m2o')
+    );
+    
+    if (foreignKeyFields.length >= 2) {
+      // Check if most fields are foreign keys (typical junction table pattern)
+      const nonForeignKeyFields = fields.filter(field => 
+        !field.schema?.foreign_key_table && 
+        !field.meta?.special?.includes('m2o') &&
+        field.field !== 'id' &&
+        !field.field.startsWith('date_') &&
+        !field.field.startsWith('user_')
+      );
+      
+      // If there are few non-foreign-key fields, it's likely a junction table
+      return nonForeignKeyFields.length <= 2;
+    }
+    
+    return false;
   }
 
   /**
@@ -474,14 +577,154 @@ ${omitFieldsString}
    */
   private getRelatedCollectionName(field: DirectusField): string | null {
     const special = field.meta?.special || [];
+    const options = field.meta?.options || {};
     
     // For M2O relations, get the foreign key table
     if (special.includes('m2o') && field.schema?.foreign_key_table) {
       return field.schema.foreign_key_table;
     }
     
+    // For M2M relations, check junction table and related collection
+    if (special.includes('m2m') || this.isManyToManyJunctionField(field)) {
+      // Check for explicit junction table configuration
+      if (options.junction_table) {
+        return options.junction_table;
+      }
+      
+      // Check for related collection in options
+      if (options.related_collection) {
+        return options.related_collection;
+      }
+      
+      // Try to infer from field name for M2M relationships
+      const fieldName = field.field;
+      
+      // For M2M fields, find the related collection from actual Directus relationships
+      if (special.includes('m2m')) {
+        // First check options for explicit configuration
+        if (options.related_collection) {
+          return options.related_collection;
+        }
+        
+        if (options.junction_collection) {
+          return options.junction_collection;
+        }
+        
+        if (options.collection) {
+          return options.collection;
+        }
+        
+        if (options.many_collection) {
+          return options.many_collection;
+        }
+        
+        if (options.one_collection) {
+          return options.one_collection;
+        }
+        
+        // If we have junction table info, try to infer from it
+        if (options.junction_table) {
+          const junctionTable = options.junction_table;
+          if (junctionTable.includes('_')) {
+            const parts = junctionTable.split('_');
+            const relatedPart = parts[parts.length - 1];
+            return relatedPart + 's';
+          }
+          return junctionTable;
+        }
+        
+        // Now try to find the relationship from the fetched relationships data
+        if (this.relationships.length > 0) {
+          const collectionName = field.meta?.collection;
+          
+          // Look for relationships where this collection is the "one" side of a many-to-many
+          const m2mRelation = this.relationships.find((rel: any) => 
+            rel.one_collection === collectionName &&
+            rel.one_field === fieldName &&
+            rel.many_collection !== collectionName
+          );
+          
+          if (m2mRelation) {
+            return m2mRelation.many_collection;
+          }
+          
+          // Look for relationships where this collection is the "many" side
+          const reverseM2mRelation = this.relationships.find((rel: any) => 
+            rel.many_collection === collectionName &&
+            rel.many_field === fieldName &&
+            rel.one_collection !== collectionName
+          );
+          
+          if (reverseM2mRelation) {
+            return reverseM2mRelation.one_collection;
+          }
+          
+          // Look for junction table relationships
+          const junctionRelation = this.relationships.find((rel: any) => 
+            rel.junction_collection === collectionName &&
+            (rel.one_collection !== collectionName || rel.many_collection !== collectionName)
+          );
+          
+          if (junctionRelation) {
+            // Return the other collection (not the current one)
+            return junctionRelation.one_collection === collectionName 
+              ? junctionRelation.many_collection 
+              : junctionRelation.one_collection;
+          }
+        }
+        
+        // If still no match found, try to infer from field name patterns
+        // This is a fallback for when relationship data is not available
+        const fieldNameLower = fieldName.toLowerCase();
+        
+        // Common patterns for M2M fields
+        if (fieldNameLower.includes('enable')) {
+          return 'enablers';
+        }
+        if (fieldNameLower.includes('disable')) {
+          return 'enablers'; // Often the same as enables
+        }
+        if (fieldNameLower.includes('user')) {
+          return 'users';
+        }
+        if (fieldNameLower.includes('role')) {
+          return 'roles';
+        }
+        if (fieldNameLower.includes('permission')) {
+          return 'permissions';
+        }
+        if (fieldNameLower.includes('tag')) {
+          return 'tags';
+        }
+        if (fieldNameLower.includes('category')) {
+          return 'categories';
+        }
+        
+        // Generic fallback: assume field name is the collection name
+        return fieldName.endsWith('s') ? fieldName : fieldName + 's';
+      }
+      
+      // Try to infer from junction field name (for junction table fields)
+      if (fieldName.includes('_')) {
+        const parts = fieldName.split('_');
+        // Look for patterns like: user_id -> users, application_id -> applications
+        if (parts.length >= 2) {
+          const lastPart = parts[parts.length - 1];
+          if (lastPart === 'id') {
+            const collectionPart = parts.slice(0, -1).join('_');
+            return collectionPart + 's'; // Make it plural
+          }
+        }
+      }
+    }
+    
     // For O2M relations, we need to infer from the field name or options
     if (special.includes('o2m')) {
+      // Check for explicit related collection
+      if (options.related_collection) {
+        return options.related_collection;
+      }
+      
       // For O2M, the field name usually indicates the related collection
       // e.g., 'activity_logs' field in 'audit_sessions' relates to 'audit_activity_logs'
       const fieldName = field.field;
@@ -516,6 +759,42 @@ ${omitFieldsString}
     }
 
     return schema;
+  }
+
+  /**
+   * Generate debug information about relationships in a collection
+   */
+  private generateRelationshipDebugInfo(collection: DirectusCollectionWithFields): string {
+    const relationFields = collection.fields.filter(field => this.isRelationField(field));
+    const junctionTables = this.isJunctionTable(collection);
+    
+    if (relationFields.length === 0 && !junctionTables) {
+      return '';
+    }
+
+    let debugInfo = `\n// DEBUG: Relationship information for ${collection.collection}\n`;
+    
+    if (junctionTables) {
+      debugInfo += `// This appears to be a junction table\n`;
+    }
+    
+    relationFields.forEach(field => {
+      const relatedCollection = this.getRelatedCollectionName(field);
+      const special = field.meta?.special || [];
+      const interface_ = field.meta?.interface || '';
+      const options = field.meta?.options || {};
+      
+      debugInfo += `// Field: ${field.field}\n`;
+      debugInfo += `//   Special: [${special.join(', ')}]\n`;
+      debugInfo += `//   Interface: ${interface_}\n`;
+      debugInfo += `//   Related Collection: ${relatedCollection || 'Unknown'}\n`;
+      debugInfo += `//   Junction Table: ${options.junction_table || 'None'}\n`;
+      debugInfo += `//   Is M2M Junction: ${this.isManyToManyJunctionField(field)}\n`;
+    });
+    
+    debugInfo += `// END DEBUG\n\n`;
+    
+    return debugInfo;
   }
 
   /**
@@ -584,6 +863,11 @@ ${omitFieldsString}
         
         // M2A relations are arrays
         if (special.includes('m2a')) {
+          return `z.array(${relatedSchemaName})`;
+        }
+        
+        // M2M relations are arrays (many-to-many)
+        if (special.includes('m2m') || this.isManyToManyJunctionField(field)) {
           return `z.array(${relatedSchemaName})`;
         }
       }

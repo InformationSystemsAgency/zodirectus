@@ -108,4 +108,34 @@ export class DirectusClient {
       throw new Error(`Failed to fetch server info: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Get relationship information for M2M fields
+   */
+  async getRelationships(): Promise<any[]> {
+    try {
+      const response = await this.axiosInstance.get('/relations');
+      return response.data.data || [];
+    } catch (error) {
+      console.warn('Could not fetch relationships from Directus:', error instanceof Error ? error.message : 'Unknown error');
+      return [];
+    }
+  }
+
+  /**
+   * Get relationship information for a specific collection
+   */
+  async getCollectionRelationships(collectionName: string): Promise<any[]> {
+    try {
+      const allRelations = await this.getRelationships();
+      return allRelations.filter((relation: any) => 
+        relation.one_collection === collectionName || 
+        relation.many_collection === collectionName ||
+        relation.junction_collection === collectionName
+      );
+    } catch (error) {
+      console.warn(`Could not fetch relationships for collection ${collectionName}:`, error instanceof Error ? error.message : 'Unknown error');
+      return [];
+    }
+  }
 }
