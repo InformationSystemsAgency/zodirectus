@@ -468,8 +468,8 @@ export interface DrsImageFile {
 
     // Write individual files for each collection
     for (const result of results) {
-      const singularName = StringUtils.toSingular(StringUtils.toPascalCase(result.collectionName));
-      const fileName = StringUtils.toKebabCase(singularName);
+      console.log(`Writing file for collection: ${result.collectionName}`);
+      const fileName = StringUtils.toKebabCase(result.collectionName);
       const filePath = path.join(outputDir, `${fileName}.ts`);
       
       let fileContent = '';
@@ -496,6 +496,7 @@ export interface DrsImageFile {
             });
           }
         }
+        
       }
       
       if (result.type) {
@@ -529,6 +530,8 @@ export interface DrsImageFile {
       
       // Add imports for related collections, handling circular dependencies
       const processedImports = new Set<string>(); // Track processed imports to avoid duplicates
+      
+      
       for (const singularName of relatedCollections) {
         // Find the actual collection name for this schema
         const relatedCollection = results.find(r => {
@@ -542,7 +545,7 @@ export interface DrsImageFile {
         
         if (relatedCollection) {
           // Use the actual file name that was generated for this collection
-          const relatedFileName = StringUtils.toKebabCase(StringUtils.toSingular(StringUtils.toPascalCase(relatedCollection.collectionName)));
+          const relatedFileName = StringUtils.toKebabCase(relatedCollection.collectionName);
           
           // Determine if this is a system collection and use appropriate schema names
           const isSystemCollection = relatedCollection.collectionName.startsWith('directus_');

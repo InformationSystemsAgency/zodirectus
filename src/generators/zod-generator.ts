@@ -1,6 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { z } from 'zod'; // Used in generated code strings
 import { DirectusCollectionWithFields, DirectusField, ZodirectusConfig, GeneratedSchema } from '../types';
+import { StringUtils } from '../lib';
 
 /**
  * Zod Schema Generator for Directus collections
@@ -637,39 +638,89 @@ ${omitFieldsString}
         if (this.relationships.length > 0) {
           const collectionName = field.meta?.collection;
           
-          // Look for relationships where this collection is the "one" side of a many-to-many
+          
+          // Look for relationships where this collection is involved
           const m2mRelation = this.relationships.find((rel: any) => 
-            rel.one_collection === collectionName &&
-            rel.one_field === fieldName &&
-            rel.many_collection !== collectionName
+            rel.collection === collectionName &&
+            rel.field === fieldName &&
+            rel.related_collection !== collectionName
           );
           
           if (m2mRelation) {
-            return m2mRelation.many_collection;
+            return m2mRelation.related_collection;
           }
           
-          // Look for relationships where this collection is the "many" side
+          // Look for relationships where this collection is the related collection
           const reverseM2mRelation = this.relationships.find((rel: any) => 
-            rel.many_collection === collectionName &&
-            rel.many_field === fieldName &&
-            rel.one_collection !== collectionName
+            rel.related_collection === collectionName &&
+            rel.collection !== collectionName
           );
           
           if (reverseM2mRelation) {
-            return reverseM2mRelation.one_collection;
+            return reverseM2mRelation.collection;
           }
           
-          // Look for junction table relationships
-          const junctionRelation = this.relationships.find((rel: any) => 
-            rel.junction_collection === collectionName &&
-            (rel.one_collection !== collectionName || rel.many_collection !== collectionName)
-          );
+          // For M2M fields, try to find junction tables that connect this collection to another collection
+          // Look for junction tables with pattern: {collectionName}_{relatedCollectionName}
+          const junctionRelations = this.relationships.filter((rel: any) => {
+            const junctionCollection = rel.collection;
+            // Check if this is a junction table that connects to our current collection
+            return junctionCollection.includes('_') && 
+                   junctionCollection.includes(collectionName) &&
+                   rel.related_collection === collectionName;
+          });
           
-          if (junctionRelation) {
-            // Return the other collection (not the current one)
-            return junctionRelation.one_collection === collectionName 
-              ? junctionRelation.many_collection 
-              : junctionRelation.one_collection;
+          if (junctionRelations.length > 0) {
+            
+            // For specific field names, try to find the most relevant junction table
+            let targetJunctionRelation = null;
+            
+            // Try to match field name to junction table pattern
+            if (fieldName === 'enables' || fieldName === 'disables') {
+              // Look for junction tables that contain "enabler"
+              targetJunctionRelation = junctionRelations.find((rel: any) => 
+                rel.collection.toLowerCase().includes('enabler')
+              );
+              
+              // If not found, try to find junction tables that don't contain "question"
+              if (!targetJunctionRelation) {
+                targetJunctionRelation = junctionRelations.find((rel: any) => 
+                  !rel.collection.toLowerCase().includes('question')
+                );
+              }
+            }
+            
+            // If no specific match, use the first junction relation
+            if (!targetJunctionRelation && junctionRelations.length > 0) {
+              targetJunctionRelation = junctionRelations[0];
+            }
+            
+            if (targetJunctionRelation) {
+              const junctionName = targetJunctionRelation.collection;
+              const parts = junctionName.split('_');
+              
+              // Look for pattern like "Answer_Enabler" -> "enablers"
+              if (parts.length >= 2) {
+                const relatedPart = parts.find((part: string) => 
+                  part.toLowerCase() !== (collectionName || '').toLowerCase() && 
+                  part.toLowerCase() !== 'id'
+                );
+                
+                if (relatedPart) {
+                  // Convert to plural form for the related collection name
+                  const relatedCollection = relatedPart.toLowerCase() + 's';
+                  
+                  // Verify this collection exists in our relationships
+                  const relatedExists = this.relationships.some((rel: any) => 
+                    rel.collection === relatedCollection || rel.related_collection === relatedCollection
+                  );
+                  
+                  if (relatedExists) {
+                    return relatedCollection;
+                  }
+                }
+              }
+            }
           }
         }
         
@@ -1030,35 +1081,8 @@ ${omitFieldsString}
    * Convert plural word to singular
    */
   private toSingular(word: string): string {
-    // Common plural to singular conversions
-    // const pluralToSingular: Record<string, string> = {
-    //   'Applications': 'Application',
-    //   'Banks': 'Bank',
-    //   'Clerks': 'Clerk',
-    //   'Languages': 'Language',
-    //   'Globals': 'Global',
-    //   'AuditAccountabilityLogs': 'AuditAccountabilityLog',
-    //   'AuditActivityLogs': 'AuditActivityLog',
-    //   'AuditSessions': 'AuditSession',
-    //   'GlobalsTranslations': 'GlobalsTranslation'
-    // };
-
-    // if (pluralToSingular[word]) {
-    //   return pluralToSingular[word];
-    // }
-
-    // Generic rules for common plural patterns
-    if (word.endsWith('ies')) {
-      return word.slice(0, -3) + 'y';
-    }
-    if (word.endsWith('ses') || word.endsWith('shes') || word.endsWith('ches') || word.endsWith('xes') || word.endsWith('zes')) {
-      return word.slice(0, -2);
-    }
-    if (word.endsWith('s') && word.length > 1) {
-      return word.slice(0, -1);
-    }
-
-    return word;
+    // Use the shared StringUtils method instead of duplicating logic
+    return StringUtils.toSingular(word);
   }
 
   /**

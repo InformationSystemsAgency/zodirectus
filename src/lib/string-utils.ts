@@ -17,8 +17,13 @@ export class StringUtils {
    */
   static toKebabCase(str: string): string {
     return str
+      // Handle camelCase: add hyphen before uppercase letters following lowercase
       .replace(/([a-z])([A-Z])/g, '$1-$2')
+      // Handle PascalCase: add hyphen before uppercase letters following other uppercase letters
+      .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+      // Replace underscores and spaces with hyphens
       .replace(/[\s_]+/g, '-')
+      // Convert to lowercase
       .toLowerCase();
   }
 
@@ -64,6 +69,52 @@ export class StringUtils {
       return this.capitalizeFirst(irregularPlurals[lowerWord], word);
     }
 
+    // Handle Directus compound words first (special case)
+    if (word.startsWith('Directus') && word.length > 'Directus'.length) {
+      // For compound words like "DirectusRevisions", preserve the compound structure
+      if (word.endsWith('s') && !word.endsWith('ies')) {
+        const lastPart = word.match(/Directus([A-Z][a-z]*s?)$/);
+        if (lastPart) {
+          const root = lastPart[1].slice(0, -1); // Remove the 's'
+          return word.replace(/Directus([A-Z][a-z]*s?)$/, `Directus${root}`);
+        }
+      }
+      // For compound words like "DirectusPolicies", handle -ies -> -y
+      if (word.endsWith('ies')) {
+        const lastPart = word.match(/Directus([A-Z][a-z]*ies)$/);
+        if (lastPart) {
+          const root = lastPart[1].slice(0, -3) + 'y'; // Convert -ies to -y
+          return word.replace(/Directus([A-Z][a-z]*ies)$/, `Directus${root}`);
+        }
+      }
+    }
+
+    // Handle other compound words (like DialogueXxx, AnswerXxx, etc.)
+    if (word.match(/^[A-Z][a-z]*[A-Z]/)) {
+      // Split by capital letters to find word parts
+      const parts = word.split(/(?=[A-Z])/);
+      if (parts.length >= 2) {
+        const lastPart = parts[parts.length - 1];
+        
+        // For compound words ending in 's', preserve the compound structure
+        if (word.endsWith('s') && !word.endsWith('ies')) {
+          if (lastPart.endsWith('s') && lastPart.length > 1) {
+            const root = lastPart.slice(0, -1); // Remove the 's'
+            parts[parts.length - 1] = root;
+            return parts.join('');
+          }
+        }
+        // For compound words ending in 'ies', handle -ies -> -y
+        if (word.endsWith('ies')) {
+          if (lastPart.endsWith('ies') && lastPart.length > 3) {
+            const root = lastPart.slice(0, -3) + 'y'; // Convert -ies to -y
+            parts[parts.length - 1] = root;
+            return parts.join('');
+          }
+        }
+      }
+    }
+
     // Regular plural rules
     // Words ending in -ies (e.g., categories -> category)
     if (lowerWord.endsWith('ies') && lowerWord.length > 4) {
@@ -103,11 +154,12 @@ export class StringUtils {
       const withoutS = lowerWord.slice(0, -1);
       
       // Avoid removing 's' from words that end with 's' in singular form
-      // (e.g., "glass", "class", "mass", "pass", "grass", "gas", "bus")
-      const singularEndsWithS = ['glas', 'clas', 'mas', 'pas', 'gras', 'ga', 'bu'];
+      // (e.g., "glass", "class", "mass", "pass", "grass", "gas", "bus", "access")
+      const singularEndsWithS = ['glas', 'clas', 'mas', 'pas', 'gras', 'ga', 'bu', 'acces'];
       if (singularEndsWithS.some(ending => withoutS.endsWith(ending))) {
         return word; // Keep as is
       }
+      
       
       return this.capitalizeFirst(withoutS, word);
     }
@@ -123,7 +175,23 @@ export class StringUtils {
     if (original === original.toUpperCase()) {
       return singular.toUpperCase();
     }
+    
+    // For compound words like "DirectusRevision", preserve the original capitalization pattern
     if (original[0] === original[0].toUpperCase()) {
+      // Try to reconstruct the compound word capitalization
+      // Look for common patterns in the original word
+      const originalLower = original.toLowerCase();
+      const singularLower = singular.toLowerCase();
+      
+      // If the singular word contains the original word structure, try to preserve it
+      if (singularLower.includes('directus')) {
+        // For Directus compound words, capitalize each part
+        return singularLower
+          .replace('directus', 'Directus')
+          .replace(/([a-z])([A-Z])/g, '$1$2'); // Preserve existing capitals
+      }
+      
+      // Default: just capitalize the first letter
       return singular.charAt(0).toUpperCase() + singular.slice(1);
     }
     return singular;
