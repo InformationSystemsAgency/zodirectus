@@ -2,6 +2,7 @@ import { ZodirectusConfig, GeneratedSchema } from './types';
 import { DirectusClient } from './utils/directus-client';
 import { ZodGenerator } from './generators/zod-generator';
 import { TypeGenerator } from './generators/type-generator';
+import { StringUtils, DependencyUtils } from './lib';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -105,13 +106,13 @@ export class Zodirectus {
       }
 
       // After all schemas are generated, detect circular dependencies and regenerate lazy schemas
-      const dependencyGraph = this.buildDependencyGraph(results);
-      const circularDeps = this.detectCircularDependencies(dependencyGraph);
+      const dependencyGraph = DependencyUtils.buildDependencyGraph(results);
+      const circularDeps = DependencyUtils.detectCircularDependencies(dependencyGraph);
       
       // Regenerate schemas for collections that are part of circular dependencies
       for (const result of results) {
         if (result.schema) {
-          const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
+          const currentCollectionName = StringUtils.toSingular(StringUtils.toPascalCase(result.collectionName));
           const isPartOfCircularDependency = circularDeps.some(cycle => 
             cycle.includes(currentCollectionName)
           );
@@ -462,13 +463,13 @@ export interface DrsImageFile {
     await this.writeFileSchemas(outputDir);
 
     // Build dependency graph and detect circular dependencies
-    const dependencyGraph = this.buildDependencyGraph(results);
-    const circularDeps = this.detectCircularDependencies(dependencyGraph);
+    const dependencyGraph = DependencyUtils.buildDependencyGraph(results);
+    const circularDeps = DependencyUtils.detectCircularDependencies(dependencyGraph);
 
     // Write individual files for each collection
     for (const result of results) {
-      const singularName = this.toSingular(this.toPascalCase(result.collectionName));
-      const fileName = this.toKebabCase(singularName);
+      const singularName = StringUtils.toSingular(StringUtils.toPascalCase(result.collectionName));
+      const fileName = StringUtils.toKebabCase(singularName);
       const filePath = path.join(outputDir, `${fileName}.ts`);
       
       let fileContent = '';
@@ -487,7 +488,7 @@ export interface DrsImageFile {
             schemaMatches.forEach(match => {
               const singularName = match.replace('Drx', '').replace('Schema', '');
               // Don't import from self and skip file schemas
-              if (singularName !== this.toSingular(this.toPascalCase(result.collectionName)) &&
+              if (singularName !== StringUtils.toSingular(StringUtils.toPascalCase(result.collectionName)) &&
                   singularName !== 'File' && 
                   singularName !== 'ImageFile') {
                 relatedCollections.add(singularName);
@@ -509,7 +510,7 @@ export interface DrsImageFile {
                 !singularName.endsWith('Get') && 
                 singularName !== 'File' && 
                 singularName !== 'ImageFile' &&
-                singularName !== this.toSingular(this.toPascalCase(result.collectionName))) {
+                singularName !== StringUtils.toSingular(StringUtils.toPascalCase(result.collectionName))) {
               relatedCollections.add(singularName);
             }
           });
@@ -531,9 +532,9 @@ export interface DrsImageFile {
       for (const singularName of relatedCollections) {
         // Find the actual collection name for this schema
         const relatedCollection = results.find(r => {
-          const collectionSingular = this.toSingular(this.toPascalCase(r.collectionName));
+          const collectionSingular = StringUtils.toSingular(StringUtils.toPascalCase(r.collectionName));
           const collectionNameWithoutPrefix = r.collectionName.replace('directus_', '');
-          const collectionSingularWithoutPrefix = this.toSingular(this.toPascalCase(collectionNameWithoutPrefix));
+          const collectionSingularWithoutPrefix = StringUtils.toSingular(StringUtils.toPascalCase(collectionNameWithoutPrefix));
           
           return collectionSingular === singularName || 
                  collectionSingularWithoutPrefix === singularName;
@@ -541,7 +542,7 @@ export interface DrsImageFile {
         
         if (relatedCollection) {
           // Use the actual file name that was generated for this collection
-          const relatedFileName = this.toKebabCase(this.toSingular(this.toPascalCase(relatedCollection.collectionName)));
+          const relatedFileName = StringUtils.toKebabCase(StringUtils.toSingular(StringUtils.toPascalCase(relatedCollection.collectionName)));
           
           // Determine if this is a system collection and use appropriate schema names
           const isSystemCollection = relatedCollection.collectionName.startsWith('directus_');
@@ -556,8 +557,8 @@ export interface DrsImageFile {
             : `Drs${baseSingularName}`;
           
           // Check if this import would create a circular dependency
-          const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
-          const isCircular = this.isCircularDependency(currentCollectionName, singularName, circularDeps);
+          const currentCollectionName = StringUtils.toSingular(StringUtils.toPascalCase(result.collectionName));
+          const isCircular = DependencyUtils.isCircularDependency(currentCollectionName, singularName, circularDeps);
           
           // Create a unique key for this import to avoid duplicates
           const importKey = `${schemaName}:${relatedFileName}`;
@@ -594,186 +595,10 @@ export interface DrsImageFile {
     }
   }
 
-  /**
-   * Build dependency graph from generated results
-   */
-  private buildDependencyGraph(results: GeneratedSchema[]): Map<string, Set<string>> {
-    const graph = new Map<string, Set<string>>();
-    
-    for (const result of results) {
-      const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
-      const dependencies = new Set<string>();
-      
-      // Extract dependencies from schema
-      if (result.schema) {
-        const schemaMatches = result.schema.match(/Drx[A-Z][a-zA-Z]*Schema/g);
-        if (schemaMatches) {
-          schemaMatches.forEach(match => {
-            const singularName = match.replace('Drx', '').replace('Schema', '');
-            // Skip Create, Update, Get schemas
-            if (!singularName.endsWith('Create') && !singularName.endsWith('Update') && !singularName.endsWith('Get') && singularName !== currentCollectionName) {
-              dependencies.add(singularName);
-            }
-          });
-        }
-      }
-      
-      // Extract dependencies from type
-      if (result.type) {
-        const typeMatches = result.type.match(/Drs[A-Z][a-zA-Z]*/g);
-        if (typeMatches) {
-          typeMatches.forEach(match => {
-            const singularName = match.replace('Drs', '');
-            // Skip Create, Update, Get types
-            if (!singularName.endsWith('Create') && !singularName.endsWith('Update') && !singularName.endsWith('Get') && singularName !== currentCollectionName) {
-              dependencies.add(singularName);
-            }
-          });
-        }
-      }
-      
-      graph.set(currentCollectionName, dependencies);
-    }
-    
-    return graph;
-  }
 
-  /**
-   * Detect circular dependencies using DFS
-   */
-  private detectCircularDependencies(graph: Map<string, Set<string>>): string[][] {
-    const visited = new Set<string>();
-    const recursionStack = new Set<string>();
-    const circularDeps = new Set<string[]>();
-    
-    const dfs = (node: string, path: string[]): void => {
-      visited.add(node);
-      recursionStack.add(node);
-      path.push(node);
-      
-      const neighbors = graph.get(node) || new Set();
-      for (const neighbor of neighbors) {
-        if (!visited.has(neighbor)) {
-          dfs(neighbor, [...path]);
-        } else if (recursionStack.has(neighbor)) {
-          // Found a cycle
-          const cycleStart = path.indexOf(neighbor);
-          const cycle = path.slice(cycleStart);
-          cycle.push(neighbor); // Complete the cycle
-          circularDeps.add(cycle);
-        }
-      }
-      
-      recursionStack.delete(node);
-    };
-    
-    for (const node of graph.keys()) {
-      if (!visited.has(node)) {
-        dfs(node, []);
-      }
-    }
-    
-    return Array.from(circularDeps);
-  }
 
-  /**
-   * Check if two collections have a circular dependency
-   */
-  private isCircularDependency(collectionA: string, collectionB: string, circularDeps: string[][]): boolean {
-    for (const cycle of circularDeps) {
-      if (cycle.includes(collectionA) && cycle.includes(collectionB)) {
-        return true;
-      }
-    }
-    return false;
-  }
 
-  /**
-   * Convert string to kebab-case for file names
-   */
-  private toKebabCase(str: string): string {
-    return str
-      .replace(/([a-z])([A-Z])/g, '$1-$2')
-      .replace(/[\s_]+/g, '-')
-      .toLowerCase();
-  }
 
-  /**
-   * Convert string to PascalCase
-   */
-  private toPascalCase(str: string): string {
-    return str
-      .split(/[-_\s]+/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join('');
-  }
-
-  /**
-   * Convert plural word to singular
-   */
-  private toSingular(word: string): string {
-    // Common plural to singular conversions
-    // const pluralToSingular: Record<string, string> = {
-    //   'Applications': 'Application',
-    //   'Banks': 'Bank',
-    //   'Clerks': 'Clerk',
-    //   'Languages': 'Language',
-    //   'Globals': 'Global',
-    //   'AuditAccountabilityLogs': 'AuditAccountabilityLog',
-    //   'AuditActivityLogs': 'AuditActivityLog',
-    //   'AuditSessions': 'AuditSession',
-    //   'GlobalsTranslations': 'GlobalsTranslation'
-    // };
-
-    // if (pluralToSingular[word]) {
-    //   return pluralToSingular[word];
-    // }
-
-    // Generic rules for common plural patterns
-    if (word.endsWith('ies')) {
-      return word.slice(0, -3) + 'y';
-    }
-    if (word.endsWith('ses') || word.endsWith('shes') || word.endsWith('ches') || word.endsWith('xes') || word.endsWith('zes')) {
-      return word.slice(0, -2);
-    }
-    if (word.endsWith('s') && word.length > 1) {
-      return word.slice(0, -1);
-    }
-
-    return word;
-  }
-
-  /**
-   * Convert singular word back to plural (reverse mapping)
-   */
-  private singularToPlural(word: string): string {
-    // Reverse mapping for common conversions
-    // const singularToPlural: Record<string, string> = {
-    //   'Application': 'Applications',
-    //   'Bank': 'Banks',
-    //   'Clerk': 'Clerks',
-    //   'Language': 'Languages',
-    //   'Global': 'Globals',
-    //   'AuditAccountabilityLog': 'AuditAccountabilityLogs',
-    //   'AuditActivityLog': 'AuditActivityLogs',
-    //   'AuditSession': 'AuditSessions',
-    //   'GlobalsTranslation': 'GlobalsTranslations'
-    // };
-
-    // if (singularToPlural[word]) {
-    //   return singularToPlural[word];
-    // }
-
-    // Generic rules for common singular patterns
-    if (word.endsWith('y')) {
-      return word.slice(0, -1) + 'ies';
-    }
-    if (word.endsWith('s') || word.endsWith('sh') || word.endsWith('ch') || word.endsWith('x') || word.endsWith('z')) {
-      return word + 'es';
-    }
-    
-    return word + 's';
-  }
 
   /**
    * Get available collections from Directus

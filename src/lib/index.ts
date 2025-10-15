@@ -2,3 +2,6 @@ export { FieldUtils } from './field-utils';
 export { StringUtils } from './string-utils';
 export { RelationshipUtils } from './relationship-utils';
 export { BaseGenerator } from './base-generator';
+export { DependencyUtils } from './dependency-utils';
+export { FileSchemaUtils } from './file-schema-utils';
+export { CollectionUtils } from './collection-utils';
