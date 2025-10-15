@@ -527,22 +527,51 @@ export interface DrsImageFile {
       }
       
       // Add imports for related collections, handling circular dependencies
+      const processedImports = new Set<string>(); // Track processed imports to avoid duplicates
       for (const singularName of relatedCollections) {
-        // Use singular name directly for file path (no need to map back to plural)
-        const relatedFileName = this.toKebabCase(singularName);
-        const schemaName = `Drx${singularName}Schema`;
-        const typeName = `Drs${singularName}`;
+        // Find the actual collection name for this schema
+        const relatedCollection = results.find(r => {
+          const collectionSingular = this.toSingular(this.toPascalCase(r.collectionName));
+          const collectionNameWithoutPrefix = r.collectionName.replace('directus_', '');
+          const collectionSingularWithoutPrefix = this.toSingular(this.toPascalCase(collectionNameWithoutPrefix));
+          
+          return collectionSingular === singularName || 
+                 collectionSingularWithoutPrefix === singularName;
+        });
         
-        // Check if this import would create a circular dependency
-        const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
-        const isCircular = this.isCircularDependency(currentCollectionName, singularName, circularDeps);
-        
-        if (isCircular) {
-          // Use lazy import for circular dependencies to avoid runtime circular imports
-          fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
-        } else {
-          // Normal import for non-circular dependencies
-          fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
+        if (relatedCollection) {
+          // Use the actual file name that was generated for this collection
+          const relatedFileName = this.toKebabCase(this.toSingular(this.toPascalCase(relatedCollection.collectionName)));
+          
+          // Determine if this is a system collection and use appropriate schema names
+          const isSystemCollection = relatedCollection.collectionName.startsWith('directus_');
+          
+          // Avoid double "Directus" prefix - if singularName already contains "Directus", don't add it again
+          const baseSingularName = singularName.replace('Directus', '');
+          const schemaName = isSystemCollection 
+            ? `DrxDirectus${baseSingularName}Schema` 
+            : `Drx${baseSingularName}Schema`;
+          const typeName = isSystemCollection 
+            ? `DrsDirectus${baseSingularName}` 
+            : `Drs${baseSingularName}`;
+          
+          // Check if this import would create a circular dependency
+          const currentCollectionName = this.toSingular(this.toPascalCase(result.collectionName));
+          const isCircular = this.isCircularDependency(currentCollectionName, singularName, circularDeps);
+          
+          // Create a unique key for this import to avoid duplicates
+          const importKey = `${schemaName}:${relatedFileName}`;
+          
+          if (!processedImports.has(importKey)) {
+            processedImports.add(importKey);
+            if (isCircular) {
+              // Use lazy import for circular dependencies to avoid runtime circular imports
+              fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
+            } else {
+              // Normal import for non-circular dependencies
+              fileContent += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
+            }
+          }
         }
       }
       

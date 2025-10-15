@@ -673,35 +673,8 @@ ${omitFieldsString}
           }
         }
         
-        // If still no match found, try to infer from field name patterns
-        // This is a fallback for when relationship data is not available
-        const fieldNameLower = fieldName.toLowerCase();
-        
-        // Common patterns for M2M fields
-        if (fieldNameLower.includes('enable')) {
-          return 'enablers';
-        }
-        if (fieldNameLower.includes('disable')) {
-          return 'enablers'; // Often the same as enables
-        }
-        if (fieldNameLower.includes('user')) {
-          return 'users';
-        }
-        if (fieldNameLower.includes('role')) {
-          return 'roles';
-        }
-        if (fieldNameLower.includes('permission')) {
-          return 'permissions';
-        }
-        if (fieldNameLower.includes('tag')) {
-          return 'tags';
-        }
-        if (fieldNameLower.includes('category')) {
-          return 'categories';
-        }
-        
-        // Generic fallback: assume field name is the collection name
-        return fieldName.endsWith('s') ? fieldName : fieldName + 's';
+        // No relationship found, return null
+        return null;
       }
       
       // Try to infer from junction field name (for junction table fields)
@@ -849,10 +822,30 @@ ${omitFieldsString}
     if (this.isRelationField(field)) {
       const relatedCollection = this.getRelatedCollectionName(field);
       if (relatedCollection) {
-        const relatedSchemaName = `Drx${this.toSingular(this.toPascalCase(relatedCollection))}Schema`;
+        // Check if this is a system collection and use appropriate schema name
+        const isSystemCollection = relatedCollection.startsWith('directus_');
+        const baseCollectionName = isSystemCollection 
+          ? relatedCollection.replace('directus_', '') 
+          : relatedCollection;
+        const collectionName = this.toSingular(this.toPascalCase(baseCollectionName));
+        const relatedSchemaName = isSystemCollection 
+          ? `DrxDirectus${collectionName}Schema` 
+          : `Drx${collectionName}Schema`;
+        
+        // Check if this is a self-reference (same collection)
+        const currentCollectionName = field.meta?.collection || '';
+        const isSelfReference = currentCollectionName === relatedCollection;
         
         // M2O relations are single objects
         if (special.includes('m2o')) {
+          if (isSelfReference) {
+            // For self-references, use the correct schema name without double prefix
+            const selfSchemaName = isSystemCollection 
+              ? `DrxDirectus${this.toSingular(this.toPascalCase(relatedCollection.replace('directus_', '')))}Schema`
+              : `Drx${this.toSingular(this.toPascalCase(relatedCollection))}Schema`;
+            // Use z.lazy() for self-references to handle circular dependencies
+            return `z.lazy(() => ${selfSchemaName})`;
+          }
           return relatedSchemaName;
         }
         

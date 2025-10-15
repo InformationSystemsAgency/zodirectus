@@ -633,35 +633,8 @@ export class TypeGenerator {
           }
         }
         
-        // If still no match found, try to infer from field name patterns
-        // This is a fallback for when relationship data is not available
-        const fieldNameLower = fieldName.toLowerCase();
-        
-        // Common patterns for M2M fields
-        if (fieldNameLower.includes('enable')) {
-          return 'enablers';
-        }
-        if (fieldNameLower.includes('disable')) {
-          return 'enablers'; // Often the same as enables
-        }
-        if (fieldNameLower.includes('user')) {
-          return 'users';
-        }
-        if (fieldNameLower.includes('role')) {
-          return 'roles';
-        }
-        if (fieldNameLower.includes('permission')) {
-          return 'permissions';
-        }
-        if (fieldNameLower.includes('tag')) {
-          return 'tags';
-        }
-        if (fieldNameLower.includes('category')) {
-          return 'categories';
-        }
-        
-        // Generic fallback: assume field name is the collection name
-        return fieldName.endsWith('s') ? fieldName : fieldName + 's';
+        // No relationship found, return null
+        return null;
       }
       
       // Try to infer from junction field name (for junction table fields)
@@ -694,6 +667,7 @@ export class TypeGenerator {
       // Add more patterns as needed
     }
     
+    // No relationship found, return null
     return null;
   }
 
@@ -770,7 +744,15 @@ export class TypeGenerator {
     if (this.isRelationField(field)) {
       const relatedCollection = this.getRelatedCollectionName(field);
       if (relatedCollection) {
-        const relatedTypeName = `Drs${this.toSingular(this.toPascalCase(relatedCollection))}`;
+        // Check if this is a system collection and use appropriate type name
+        const isSystemCollection = relatedCollection.startsWith('directus_');
+        const baseCollectionName = isSystemCollection 
+          ? relatedCollection.replace('directus_', '') 
+          : relatedCollection;
+        const collectionName = this.toSingular(this.toPascalCase(baseCollectionName));
+        const relatedTypeName = isSystemCollection 
+          ? `DrsDirectus${collectionName}` 
+          : `Drs${collectionName}`;
         
         // M2O relations are single objects
         if (special.includes('m2o')) {
