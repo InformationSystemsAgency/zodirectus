@@ -5,3 +5,5 @@ export { BaseGenerator } from './base-generator';
 export { DependencyUtils } from './dependency-utils';
 export { FileSchemaUtils } from './file-schema-utils';
 export { CollectionUtils } from './collection-utils';
+export { ImportUtils } from './import-utils';
+export { FileWriterUtils } from './file-writer-utils';
