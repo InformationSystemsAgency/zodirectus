@@ -61,7 +61,8 @@ export class ImportUtils {
   static generateImportStatements(
     result: GeneratedSchema,
     results: GeneratedSchema[],
-    circularDeps: string[][]
+    circularDeps: string[][],
+    isSystemCollection: boolean = false
   ): string {
     const relatedCollections = this.extractRelatedCollections(result);
     const processedImports = new Set<string>(); // Track processed imports to avoid duplicates
@@ -81,16 +82,14 @@ export class ImportUtils {
       if (relatedCollection) {
         // Use the actual file name that was generated for this collection
         const relatedFileName = StringUtils.toKebabCase(relatedCollection.collectionName);
+        const isRelatedSystemCollection = relatedCollection.collectionName.startsWith('directus_');
         
         // Determine if this is a system collection and use appropriate schema names
-        const isSystemCollection = relatedCollection.collectionName.startsWith('directus_');
-        
-        // Avoid double "Directus" prefix - if singularName already contains "Directus", don't add it again
         const baseSingularName = singularName.replace('Directus', '');
-        const schemaName = isSystemCollection 
+        const schemaName = isRelatedSystemCollection 
           ? `DrxDirectus${baseSingularName}Schema` 
           : `Drx${baseSingularName}Schema`;
-        const typeName = isSystemCollection 
+        const typeName = isRelatedSystemCollection 
           ? `DrsDirectus${baseSingularName}` 
           : `Drs${baseSingularName}`;
         
@@ -103,12 +102,29 @@ export class ImportUtils {
         
         if (!processedImports.has(importKey)) {
           processedImports.add(importKey);
+          
+          // Determine the correct import path based on folder structure
+          let importPath = '';
+          if (isSystemCollection && isRelatedSystemCollection) {
+            // Both are system collections - import from same folder
+            importPath = `'./${relatedFileName}'`;
+          } else if (isSystemCollection && !isRelatedSystemCollection) {
+            // Current is system, related is regular - import from parent folder
+            importPath = `'../${relatedFileName}'`;
+          } else if (!isSystemCollection && isRelatedSystemCollection) {
+            // Current is regular, related is system - import from system folder
+            importPath = `'./system/${relatedFileName}'`;
+          } else {
+            // Both are regular collections - import from same folder
+            importPath = `'./${relatedFileName}'`;
+          }
+          
           if (isCircular) {
             // Use lazy import for circular dependencies to avoid runtime circular imports
-            importStatements += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
+            importStatements += `import { ${schemaName}, type ${typeName} } from ${importPath};\n`;
           } else {
             // Normal import for non-circular dependencies
-            importStatements += `import { ${schemaName}, type ${typeName} } from './${relatedFileName}';\n`;
+            importStatements += `import { ${schemaName}, type ${typeName} } from ${importPath};\n`;
           }
         }
       }
@@ -120,9 +136,11 @@ export class ImportUtils {
   /**
    * Generate file schema import if needed
    */
-  static generateFileSchemaImport(result: GeneratedSchema): string {
+  static generateFileSchemaImport(result: GeneratedSchema, isSystemCollection: boolean = false): string {
     if (result.schema && (result.schema.includes('DrxFileSchema') || result.schema.includes('DrxImageFileSchema'))) {
-      return `import { DrxFileSchema, DrxImageFileSchema, type DrsFile, type DrsImageFile } from './file-schemas';\n`;
+      // System collections need to import from parent folder
+      const importPath = isSystemCollection ? "'../file-schemas'" : "'./file-schemas'";
+      return `import { DrxFileSchema, DrxImageFileSchema, type DrsFile, type DrsImageFile } from ${importPath};\n`;
     }
     return '';
   }

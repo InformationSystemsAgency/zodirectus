@@ -18,17 +18,39 @@ export class FileWriterUtils {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
+    // Create system subdirectory for Directus system collections
+    const systemDir = path.join(outputDir, 'system');
+    if (!fs.existsSync(systemDir)) {
+      fs.mkdirSync(systemDir, { recursive: true });
+    }
+
     // Build dependency graph and detect circular dependencies
     const dependencyGraph = DependencyUtils.buildDependencyGraph(results);
     const circularDeps = DependencyUtils.detectCircularDependencies(dependencyGraph);
 
-    // Write individual files for each collection
-    for (const result of results) {
+    // Separate system and regular collections
+    const systemCollections = results.filter(r => r.collectionName.startsWith('directus_'));
+    const regularCollections = results.filter(r => !r.collectionName.startsWith('directus_'));
+
+    // Write system collections to system/ subfolder
+    for (const result of systemCollections) {
+      console.log(`Writing system file for collection: ${result.collectionName}`);
+      const fileName = StringUtils.toKebabCase(result.collectionName);
+      const filePath = path.join(systemDir, `${fileName}.ts`);
+      
+      const fileContent = this.generateFileContent(result, results, circularDeps, true);
+      
+      // Write the file
+      fs.writeFileSync(filePath, fileContent);
+    }
+
+    // Write regular collections to root folder
+    for (const result of regularCollections) {
       console.log(`Writing file for collection: ${result.collectionName}`);
       const fileName = StringUtils.toKebabCase(result.collectionName);
       const filePath = path.join(outputDir, `${fileName}.ts`);
       
-      const fileContent = this.generateFileContent(result, results, circularDeps);
+      const fileContent = this.generateFileContent(result, results, circularDeps, false);
       
       // Write the file
       fs.writeFileSync(filePath, fileContent);
@@ -41,7 +63,8 @@ export class FileWriterUtils {
   static generateFileContent(
     result: GeneratedSchema,
     results: GeneratedSchema[],
-    circularDeps: string[][]
+    circularDeps: string[][],
+    isSystemCollection: boolean = false
   ): string {
     let fileContent = '';
     
@@ -49,10 +72,10 @@ export class FileWriterUtils {
     fileContent += ImportUtils.generateZodImport(result);
     
     // Add file schemas import if needed
-    fileContent += ImportUtils.generateFileSchemaImport(result);
+    fileContent += ImportUtils.generateFileSchemaImport(result, isSystemCollection);
     
     // Add imports for related collections
-    fileContent += ImportUtils.generateImportStatements(result, results, circularDeps);
+    fileContent += ImportUtils.generateImportStatements(result, results, circularDeps, isSystemCollection);
     
     // Add spacing after imports
     if (fileContent.includes('import')) {
