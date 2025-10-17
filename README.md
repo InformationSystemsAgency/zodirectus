@@ -266,9 +266,10 @@ Zodirectus handles the following Directus field types and interfaces:
 - **Choice Fields**: Fields with `choices` or `options` → Enum validation
 
 ### Relation Fields
-- **Many-to-One (M2O)**: References to other collections
-- **One-to-Many (O2M)**: Arrays of related collection objects
-- **Many-to-Any (M2A)**: Polymorphic relations
+- **Many-to-One (M2O)**: References to a single item in another collection (`post.author_id` → `User`)
+- **One-to-Many (O2M)**: Arrays of related objects; typically exposed via the related collection (`user.posts` → `Post[]`)
+- **Many-to-Any (M2A)**: Polymorphic relations pointing to different collections (e.g., `comment.item` could be `Post` or `Event`)
+- **Many-to-Many (M2M)**: Arrays of related collection objects, handled via junction tables (e.g., `student.courses` → `Course[]`)
 
 ### System Fields
 - **Hidden Fields**: `user_created`, `user_updated`, `date_created`, `date_updated`, `status`, `sort`
