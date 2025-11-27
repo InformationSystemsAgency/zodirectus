@@ -18,20 +18,6 @@ pnpm add https://github.com/InformationSystemsAgency/zodirectus.git
 pnpm add -g https://github.com/InformationSystemsAgency/zodirectus.git
 ```
 
-### Alternative: Clone and build locally
-```bash
-# Clone the repository
-git clone https://github.com/InformationSystemsAgency/zodirectus.git
-cd zodirectus
-
-# Install dependencies and build
-pnpm install
-pnpm run build
-
-# Use the CLI locally
-node dist/cli.js --help
-```
-
 ## Quick Start
 
 ### CLI Usage
